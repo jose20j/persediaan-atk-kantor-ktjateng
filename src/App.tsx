@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import kejaksaanLogo from "./assets/images/kejaksaan_logo_1779373081640.png";
 import CustomerCatalog from "./components/CustomerCatalog";
 import AdminDashboard from "./components/AdminDashboard";
@@ -6,7 +6,7 @@ import AdminItems from "./components/AdminItems";
 import AdminRequests from "./components/AdminRequests";
 import AdminSettings from "./components/AdminSettings";
 import ReportExport from "./components/ReportExport";
-import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings } from "./api";
+import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests } from "./api";
 import {
   LayoutDashboard,
   Package,
@@ -14,17 +14,9 @@ import {
   Sliders,
   Settings,
   LogOut,
-  UserCheck,
-  Lock,
   ArrowLeft,
-  Briefcase,
-  Layers,
-  Send,
-  Building,
-  CheckCircle,
-  HelpCircle,
-  FolderMinus,
-  Sparkles
+  Bell,
+  X as XIcon
 } from "lucide-react";
 
 export default function App() {
@@ -43,16 +35,16 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [officeName, setOfficeName] = useState("Portal ATK Kantor");
 
-  useEffect(() => {
-    // Populate dynamic local datasets
-    initializeLocal();
-    
-    // Check if admin is currently authenticated
-    if (isAdminLoggedIn()) {
-      setPov("customer"); // Keep Customer Catalog as starting landing view, let them choose admin manually
-    }
+  // Notification state for new pending orders
+  const [pendingCount, setPendingCount] = useState(0);
+  const [showNewOrderNotif, setShowNewOrderNotif] = useState(false);
+  const prevPendingCount = useRef(0);
 
-    // Load office name
+  useEffect(() => {
+    initializeLocal();
+    if (isAdminLoggedIn()) {
+      setPov("customer");
+    }
     const fetchOffice = async () => {
       try {
         const set = await getSettings();
@@ -61,6 +53,30 @@ export default function App() {
     };
     fetchOffice();
   }, []);
+
+  // Poll for new pending orders when admin is logged in
+  useEffect(() => {
+    if (pov !== "admin_portal") return;
+
+    const poll = async () => {
+      try {
+        const reqs = await getRequests();
+        const pendingOrderIds = new Set(
+          reqs.filter(r => r.status === "Pending").map(r => r.order_id || r.id)
+        );
+        const count = pendingOrderIds.size;
+        if (prevPendingCount.current > 0 && count > prevPendingCount.current) {
+          setShowNewOrderNotif(true);
+        }
+        prevPendingCount.current = count;
+        setPendingCount(count);
+      } catch {}
+    };
+
+    poll();
+    const interval = setInterval(poll, 30000);
+    return () => clearInterval(interval);
+  }, [pov]);
 
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,11 +247,11 @@ export default function App() {
           {/* Navigation Items list */}
           <div className="p-4 space-y-1.5">
             {[
-              { id: 1, label: "Statistik Ringkasan", icon: LayoutDashboard },
-              { id: 2, label: "Manajemen Barang", icon: Package },
-              { id: 3, label: "Permintaan Masuk", icon: FileText },
-              { id: 4, label: "Export Laporan", icon: Sliders },
-              { id: 5, label: "Pengaturan & Kontrol", icon: Settings }
+              { id: 1, label: "Statistik Ringkasan", icon: LayoutDashboard, badge: 0 },
+              { id: 2, label: "Manajemen Barang", icon: Package, badge: 0 },
+              { id: 3, label: "Permintaan Masuk", icon: FileText, badge: pendingCount },
+              { id: 4, label: "Export Laporan", icon: Sliders, badge: 0 },
+              { id: 5, label: "Pengaturan & Kontrol", icon: Settings, badge: 0 }
             ].map((tab) => {
               const IconComp = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -249,8 +265,13 @@ export default function App() {
                       : "hover:bg-slate-800 hover:text-slate-200"
                   }`}
                 >
-                  <IconComp className={`h-4.5 w-4.5 ${isSelected ? "text-white" : "text-slate-400"}`} />
-                  {tab.label}
+                  <IconComp className={`h-4.5 w-4.5 shrink-0 ${isSelected ? "text-white" : "text-slate-400"}`} />
+                  <span className="flex-1">{tab.label}</span>
+                  {tab.badge > 0 && (
+                    <span className="bg-rose-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -291,6 +312,28 @@ export default function App() {
             </span>
           </div>
         </header>
+
+        {/* New order notification toast */}
+        {showNewOrderNotif && (
+          <div className="fixed top-4 right-4 z-[100] bg-white border border-amber-200 shadow-2xl rounded-2xl p-4 flex items-center gap-3 max-w-sm animate-in slide-in-from-right duration-300">
+            <div className="bg-amber-100 p-2.5 rounded-xl shrink-0">
+              <Bell className="h-5 w-5 text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-slate-800 text-sm">Pesanan Baru Masuk!</p>
+              <p className="text-xs text-slate-500 mt-0.5">{pendingCount} pesanan menunggu konfirmasi admin.</p>
+            </div>
+            <button
+              onClick={() => { setShowNewOrderNotif(false); setActiveTab(3); }}
+              className="text-xs font-bold text-teal-600 hover:text-teal-800 shrink-0 cursor-pointer"
+            >
+              Lihat
+            </button>
+            <button onClick={() => setShowNewOrderNotif(false)} className="text-slate-400 hover:text-slate-600 shrink-0 cursor-pointer">
+              <XIcon className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {/* Workspace Central Views */}
         <main className="p-6 sm:p-8 flex-1">

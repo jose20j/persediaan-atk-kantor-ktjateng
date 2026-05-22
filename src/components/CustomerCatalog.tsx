@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/kejaksaan_logo_1779373081640.png";
-import { Item, RequestOrder, Setting, Bidang } from "../types";
-import { Search, Filter, ShoppingBag, Send, AlertTriangle, AlertCircle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus } from "lucide-react";
+import { Item, Setting, Bidang } from "../types";
+import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";
 
 interface CustomerCatalogProps {
@@ -111,10 +111,7 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
     try {
       setSubmittingOrder(true);
 
-      // Satu order_id untuk semua item dalam keranjang ini
       const orderId = "ord-" + Math.random().toString(36).substr(2, 9);
-
-      // Create request payload for each item
       const requestPayloads = cart.map(itemCart => ({
         order_id: orderId,
         item_id: itemCart.item.id,
@@ -124,49 +121,13 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
         keterangan_customer: orderForm.keterangan_customer
       }));
 
-      // Call sequential / parallel createRequest
       await Promise.all(requestPayloads.map(payload => createRequest(payload)));
 
-      // Format current timestamp
-      const timestamp = new Date().toLocaleString("id-ID", {
-        dateStyle: "medium",
-        timeStyle: "short"
-      });
-
-      // Prepare Whatsapp Grouped Message 
-      const bulletHeader = "Halo Admin, saya ingin memesan ATK:";
-      const bulletBidang = `📋 Bidang: ${orderForm.bidang || "Umum"}`;
-      const bulletPemesan = `👤 Pemesan: ${orderForm.nama_pemesan}`;
-      const bulletTime = `⏰ Tanggal: ${timestamp}`;
-      
-      let itemLines = "";
-      cart.forEach((c, index) => {
-        itemLines += `\n${index + 1}. ${c.item.nama_barang} (${c.quantity} ${c.item.satuan})`;
-      });
-
-      const bulletList = `📦 Daftar Barang Pesanan:${itemLines}`;
-      const bulletKet = `📝 Keterangan: ${orderForm.keterangan_customer || "-"}`;
-      const footerMsg = "\n*Mohon dikonfirmasi jumlah yang dapat dipenuhi. Terima kasih.*";
-
-      const waMessage = `${bulletHeader}\n\n${bulletBidang}\n${bulletPemesan}\n${bulletTime}\n\n${bulletList}\n\n${bulletKet}\n${footerMsg}`;
-      
-      const adminPhone = settings.nomor_whatsapp_admin || "6281234567890";
-      const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(waMessage)}`;
-
-      // Clear Cart & Close Modal
       setCart([]);
       setShowCartModal(false);
+      setOrderForm(prev => ({ ...prev, nama_pemesan: "", keterangan_customer: "" }));
       setShowSuccessToast(true);
-
-      // Open WhatsApp in new tab / redirect
-      window.location.href = waUrl;
-
-      // Reset Toast after delay
-      setTimeout(() => {
-        setShowSuccessToast(false);
-      }, 5000);
-
-      // Reload to catch latest dynamic inventory status change
+      setTimeout(() => setShowSuccessToast(false), 5000);
       loadData();
     } catch (err) {
       console.error(err);
@@ -185,8 +146,8 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
             <Check className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h4 className="font-semibold text-sm">Pesanan Berhasil Disimpan!</h4>
-            <p className="text-xs text-white/80 mt-1">Mengalihkan ke WhatsApp untuk konfirmasi pesan ke Admin...</p>
+            <h4 className="font-semibold text-sm">Pesanan Berhasil Dikirim!</h4>
+            <p className="text-xs text-white/80 mt-1">Pesanan Anda telah diterima dan sedang menunggu konfirmasi admin.</p>
           </div>
         </div>
       )}
@@ -243,13 +204,13 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
             <div>
               <h2 className="text-lg font-bold text-slate-800">Bagaimana Cara Memesan ATK?</h2>
               <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-                Cari kertas, pulpen, atau alat perkantoran lainnya pada katalog di bawah ini. Masukkan beberapa barang yang Anda butuhkan ke <strong className="text-teal-700">Keranjang Pesanan</strong>, klik ikon keranjang untuk menyesuaikan jumlahnya, lalu kirim sekaligus. Sistem akan mendaftarkannya di antrean serta membuka WhatsApp untuk mengirim konfirmasi rekap ke nomor Admin.
+                Cari kertas, pulpen, atau alat perkantoran lainnya pada katalog di bawah ini. Masukkan beberapa barang yang Anda butuhkan ke <strong className="text-teal-700">Keranjang Pesanan</strong>, klik ikon keranjang untuk menyesuaikan jumlahnya, lalu kirim sekaligus. Admin akan memproses permintaan Anda dan mengonfirmasi jumlah yang dapat dipenuhi.
               </p>
             </div>
           </div>
           <div className="flex gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Terintegrasi WA Admin
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Terintegrasi Sistem ATK
             </span>
           </div>
         </div>
@@ -447,9 +408,7 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs">&copy; Kejaksaan Tinggi Jawa Tengah - Jose Juan Sebastian, S.M.</p>
           <div className="flex gap-4 text-xs font-medium text-slate-500">
-            <p>Sistem Persediaan ATK v1.2</p>
-            <span>&bull;</span>
-            <p>Terintegrasi WhatsApp API Gateway</p>
+            <p>Sistem Persediaan ATK v1.3</p>
           </div>
         </div>
       </footer>
@@ -615,7 +574,7 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
                 >
                   {submittingOrder ? "Memproses..." : (
                     <>
-                      Kirim & Chat WA <Send className="h-3.5 w-3.5" />
+                      Kirim Pesanan <Send className="h-3.5 w-3.5" />
                     </>
                   )}
                 </button>
