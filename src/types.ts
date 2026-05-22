@@ -12,6 +12,7 @@ export interface Item {
 
 export interface RequestOrder {
   id: string;
+  order_id?: string;
   item_id: string;
   nama_pemesan: string;
   bidang: string;

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS items (
 -- 2. Tabel REQUESTS (Permintaan ATK dari pegawai)
 CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY,
+  order_id TEXT,                              -- ID grup order (semua item 1 keranjang punya order_id sama)
   item_id TEXT REFERENCES items(id) ON DELETE SET NULL,
   nama_pemesan TEXT NOT NULL,
   bidang TEXT NOT NULL,
@@ -31,6 +32,9 @@ CREATE TABLE IF NOT EXISTS requests (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   approved_at TIMESTAMPTZ
 );
+
+-- Jalankan ini jika tabel sudah ada (migrasi):
+-- ALTER TABLE requests ADD COLUMN IF NOT EXISTS order_id TEXT;
 
 -- 3. Tabel STOCK_HISTORY (Riwayat stok)
 CREATE TABLE IF NOT EXISTS stock_history (

@@ -208,7 +208,7 @@ app.get("/api/requests", async (req, res) => {
 });
 
 app.post("/api/requests", async (req, res) => {
-  const { item_id, nama_pemesan, bidang, jumlah_diminta, keterangan_customer } = req.body;
+  const { item_id, nama_pemesan, bidang, jumlah_diminta, keterangan_customer, order_id } = req.body;
 
   const { data: itm, error: itmErr } = await supabase.from("items").select("*").eq("id", item_id).single();
   if (itmErr || !itm) return res.status(404).json({ error: "Barang tidak valid." });
@@ -219,6 +219,7 @@ app.post("/api/requests", async (req, res) => {
 
   const newRequest = {
     id: genId("req"),
+    order_id: order_id || genId("ord"),
     item_id,
     nama_pemesan,
     bidang,

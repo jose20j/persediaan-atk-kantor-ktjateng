@@ -111,8 +111,12 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
     try {
       setSubmittingOrder(true);
 
+      // Satu order_id untuk semua item dalam keranjang ini
+      const orderId = "ord-" + Math.random().toString(36).substr(2, 9);
+
       // Create request payload for each item
       const requestPayloads = cart.map(itemCart => ({
+        order_id: orderId,
         item_id: itemCart.item.id,
         nama_pemesan: orderForm.nama_pemesan,
         bidang: orderForm.bidang || "Umum",

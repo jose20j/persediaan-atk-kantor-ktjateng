@@ -449,6 +449,7 @@ export async function createRequest(order: Omit<RequestOrder, "id" | "jumlah_dis
   const newReq: RequestOrder = {
     ...order,
     id: "req-" + Math.random().toString(36).substr(2, 9),
+    order_id: order.order_id || "ord-" + Math.random().toString(36).substr(2, 9),
     jumlah_disetujui: null,
     status: "Pending",
     catatan_admin: "",
