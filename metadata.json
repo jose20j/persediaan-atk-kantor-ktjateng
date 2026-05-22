@@ -1,0 +1,6 @@
+{
+  "name": "Persediaan ATK Kantor",
+  "description": "Sistem Manajemen Persediaan Alat Tulis Kantor (ATK) dengan Integrasi WhatsApp untuk Pemesanan Barang dan Pemenuhan Parsial.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

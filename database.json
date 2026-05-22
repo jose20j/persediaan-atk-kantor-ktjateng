@@ -1,0 +1,193 @@
+{
+  "items": [
+    {
+      "id": "itm-1",
+      "nama_barang": "Kertas HVS Sinar Dunia A4 80gr",
+      "kategori": "Kertas",
+      "satuan": "Rim",
+      "stok": 15,
+      "stok_minimum": 5,
+      "gambar_url": "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-04-21T13:47:14.329Z",
+      "updated_at": "2026-04-21T13:47:14.329Z"
+    },
+    {
+      "id": "itm-2",
+      "nama_barang": "Kertas HVS Sinar Dunia F4 80gr",
+      "kategori": "Kertas",
+      "satuan": "Rim",
+      "stok": 12,
+      "stok_minimum": 5,
+      "gambar_url": "https://images.unsplash.com/photo-1512418490979-917ba593d887?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-04-26T13:47:14.329Z",
+      "updated_at": "2026-04-26T13:47:14.329Z"
+    },
+    {
+      "id": "itm-3",
+      "nama_barang": "Pulpen Gel Kenko Easy Gel 0.5mm",
+      "kategori": "Alat Tulis",
+      "satuan": "Lusin",
+      "stok": 8,
+      "stok_minimum": 3,
+      "gambar_url": "https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-04-22T13:47:14.329Z",
+      "updated_at": "2026-04-22T13:47:14.329Z"
+    },
+    {
+      "id": "itm-4",
+      "nama_barang": "Pensil Faber-Castell 2B Original",
+      "kategori": "Alat Tulis",
+      "satuan": "Pcs",
+      "stok": 42,
+      "stok_minimum": 10,
+      "gambar_url": "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-04-23T13:47:14.329Z",
+      "updated_at": "2026-04-23T13:47:14.329Z"
+    },
+    {
+      "id": "itm-5",
+      "nama_barang": "Stapler MAX HD-10 Tokyo Original",
+      "kategori": "Peralatan Kantor",
+      "satuan": "Pcs",
+      "stok": 3,
+      "stok_minimum": 4,
+      "gambar_url": "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-05-01T13:47:14.329Z",
+      "updated_at": "2026-05-01T13:47:14.329Z"
+    },
+    {
+      "id": "itm-6",
+      "nama_barang": "Isi Staples MAX No. 10",
+      "kategori": "Peralatan Kantor",
+      "satuan": "Box",
+      "stok": 15,
+      "stok_minimum": 5,
+      "gambar_url": "https://images.unsplash.com/photo-1512418490979-917ba593d887?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-05-01T13:47:14.329Z",
+      "updated_at": "2026-05-01T13:47:14.329Z"
+    },
+    {
+      "id": "itm-7",
+      "nama_barang": "Tinta HP Ink Tank GT53 Black",
+      "kategori": "Tinta & Toner",
+      "satuan": "Pcs",
+      "stok": 2,
+      "stok_minimum": 3,
+      "gambar_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-05-06T13:47:14.329Z",
+      "updated_at": "2026-05-06T13:47:14.329Z"
+    },
+    {
+      "id": "itm-8",
+      "nama_barang": "Buku Memo Spiral Kayu A5",
+      "kategori": "Buku & Kertas",
+      "satuan": "Pcs",
+      "stok": 24,
+      "stok_minimum": 5,
+      "gambar_url": "https://images.unsplash.com/photo-1531346878377-a5be20888e57?w=500&auto=format&fit=crop&q=60",
+      "created_at": "2026-05-09T13:47:14.329Z",
+      "updated_at": "2026-05-09T13:47:14.329Z"
+    }
+  ],
+  "requests": [
+    {
+      "id": "req-1",
+      "item_id": "itm-1",
+      "nama_pemesan": "Budi Santoso",
+      "bidang": "IT",
+      "jumlah_diminta": 5,
+      "jumlah_disetujui": 2,
+      "keterangan_customer": "Untuk cetak dokumentasi modul sistem baru",
+      "catatan_admin": "Stok terbatas, dibagi rata dengan Divisi HRD",
+      "status": "Selesai",
+      "created_at": "2026-05-19T13:47:14.329Z",
+      "updated_at": "2026-05-19T13:47:14.329Z",
+      "approved_at": "2026-05-19T13:47:14.329Z"
+    },
+    {
+      "id": "req-2",
+      "item_id": "itm-3",
+      "nama_pemesan": "Siti Rahma",
+      "bidang": "Keuangan",
+      "jumlah_diminta": 2,
+      "jumlah_disetujui": 2,
+      "keterangan_customer": "Untuk operasional pelaporan pajak bulanan",
+      "catatan_admin": "Permintaan disetujui penuh",
+      "status": "Selesai",
+      "created_at": "2026-05-20T13:47:14.329Z",
+      "updated_at": "2026-05-20T13:47:14.329Z",
+      "approved_at": "2026-05-20T13:47:14.329Z"
+    },
+    {
+      "id": "req-3",
+      "item_id": "itm-5",
+      "nama_pemesan": "Wahyu",
+      "bidang": "HRD",
+      "jumlah_diminta": 1,
+      "jumlah_disetujui": null,
+      "keterangan_customer": "Butuh stapler tambahan di lobby penerimaan karyawan",
+      "catatan_admin": "",
+      "status": "Pending",
+      "created_at": "2026-05-21T13:47:14.329Z",
+      "updated_at": "2026-05-21T13:47:14.329Z"
+    }
+  ],
+  "settings": {
+    "nomor_whatsapp_admin": "6281234567890",
+    "nama_kantor": "Kejaksaan Tinggi Jawa Tengah",
+    "admin_username": "admin",
+    "admin_password": "admin123"
+  },
+  "stock_history": [
+    {
+      "id": "hst-1",
+      "item_id": "itm-1",
+      "tipe": "restock",
+      "jumlah": 20,
+      "keterangan": "Stok awal server",
+      "created_at": "2026-04-21T13:47:14.329Z"
+    },
+    {
+      "id": "hst-2",
+      "item_id": "itm-1",
+      "tipe": "pengurangan",
+      "jumlah": 2,
+      "keterangan": "Disetujui untuk pesanan Budi Santoso (IT) - ID: req-1",
+      "created_at": "2026-05-19T13:47:14.329Z"
+    },
+    {
+      "id": "hst-3",
+      "item_id": "itm-3",
+      "tipe": "pengurangan",
+      "jumlah": 2,
+      "keterangan": "Disetujui untuk pesanan Siti Rahma (Keuangan) - ID: req-2",
+      "created_at": "2026-05-20T13:47:14.329Z"
+    }
+  ],
+  "bidang": [
+    {
+      "id": "bdg-1",
+      "nama_bidang": "IT"
+    },
+    {
+      "id": "bdg-2",
+      "nama_bidang": "HRD"
+    },
+    {
+      "id": "bdg-3",
+      "nama_bidang": "Keuangan"
+    },
+    {
+      "id": "bdg-4",
+      "nama_bidang": "Marketing"
+    },
+    {
+      "id": "bdg-5",
+      "nama_bidang": "Umum & Rumah Tangga"
+    },
+    {
+      "id": "bdg-6",
+      "nama_bidang": "Operasional"
+    }
+  ]
+}
