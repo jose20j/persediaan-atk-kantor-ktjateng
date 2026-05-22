@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import kejaksaanLogo from "../assets/images/kejaksaan_logo_1779373081640.png";
 import { Item, RequestOrder, Setting, Bidang } from "../types";
 import { Search, Filter, ShoppingBag, Send, AlertTriangle, AlertCircle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";
@@ -192,7 +193,7 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
           <div className="flex items-center gap-3">
             <div className="bg-white/10 p-1 rounded-xl border border-white/20 shadow-inner flex items-center justify-center shrink-0 w-11 h-11 bg-white/20">
               <img
-                src="/src/assets/images/kejaksaan_logo_1779373081640.png"
+                src={kejaksaanLogo}
                 referrerPolicy="no-referrer"
                 className="h-8 w-8 object-contain"
                 alt="Logo Kejaksaan"

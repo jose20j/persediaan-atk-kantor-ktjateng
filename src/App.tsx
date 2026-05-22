@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import kejaksaanLogo from "./assets/images/kejaksaan_logo_1779373081640.png";
 import CustomerCatalog from "./components/CustomerCatalog";
 import AdminDashboard from "./components/AdminDashboard";
 import AdminItems from "./components/AdminItems";
@@ -137,7 +138,7 @@ export default function App() {
         <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-2">
           <div className="mx-auto h-14 w-14 flex items-center justify-center">
             <img
-              src="/src/assets/images/kejaksaan_logo_1779373081640.png"
+              src={kejaksaanLogo}
               referrerPolicy="no-referrer"
               className="h-12 w-12 object-contain"
               alt="Logo Kejaksaan"
@@ -197,12 +198,7 @@ export default function App() {
               </div>
             </form>
 
-            <div className="pt-4 border-t border-slate-100 text-center space-y-1 bg-slate-50/50 -mx-6 -mb-8 p-6 rounded-b-3xl">
-              <p className="text-[11px] text-slate-400">Akun default uji coba:</p>
-              <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded border text-slate-600">
-                admin / admin123
-              </code>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -220,7 +216,7 @@ export default function App() {
           <div className="p-6 border-b border-slate-800 flex items-center gap-3">
             <div className="h-8 w-8 flex items-center justify-center shrink-0">
               <img
-                src="/src/assets/images/kejaksaan_logo_1779373081640.png"
+                src={kejaksaanLogo}
                 referrerPolicy="no-referrer"
                 className="h-8 w-8 object-contain"
                 alt="Logo Kejaksaan"
