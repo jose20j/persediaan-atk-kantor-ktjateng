@@ -1,20 +1,33 @@
 import { Item, RequestOrder, Setting, StockHistory, Bidang, Stats } from "./types";
 
-// Detect if we can communicate with node server or if we are deployed purely as static SPA
-let useLocalFallback = false;
+type BackendStatus = "ok" | "supabase_missing" | "function_failed" | "offline";
+let _backendStatus: BackendStatus = "offline";
+let useLocalFallback = true;
 
-// Quick check if we are in static environment
 async function checkBackend() {
   try {
-    const res = await fetch("/api/settings", { signal: AbortSignal.timeout(1500) });
+    const res = await fetch("/api/health", { signal: AbortSignal.timeout(4000) });
     if (res.ok) {
-      useLocalFallback = false;
+      const data = await res.json().catch(() => ({}));
+      if (data.has_supabase_url && data.has_supabase_key) {
+        _backendStatus = "ok";
+        useLocalFallback = false;
+      } else {
+        _backendStatus = "supabase_missing";
+        useLocalFallback = true;
+      }
     } else {
+      _backendStatus = "function_failed";
       useLocalFallback = true;
     }
-  } catch (err) {
+  } catch {
+    _backendStatus = "offline";
     useLocalFallback = true;
   }
+}
+
+export function getBackendStatus(): BackendStatus {
+  return _backendStatus;
 }
 
 // Check on load
@@ -431,118 +444,50 @@ export async function getRequests(): Promise<RequestOrder[]> {
 
 export async function createRequest(order: Omit<RequestOrder, "id" | "jumlah_disetujui" | "status" | "created_at" | "updated_at" | "catatan_admin">): Promise<RequestOrder> {
   await checkBackend();
-  if (!useLocalFallback) {
-    try {
-      const res = await fetch("/api/requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
-      });
-      if (res.ok) return await res.json();
-    } catch (e) {}
+  if (useLocalFallback) {
+    if (_backendStatus === "supabase_missing") {
+      throw new Error("Database belum dikonfigurasi di server. Hubungi administrator untuk menambahkan SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di Vercel.");
+    }
+    throw new Error("Server tidak dapat dijangkau. Periksa koneksi internet Anda dan coba lagi.");
   }
-
-  const requests = getLocal("atk_requests", DEFAULT_REQUESTS);
-  const items = getLocal("atk_items", DEFAULT_ITEMS);
-  const itm = items.find(i => i.id === order.item_id);
-
-  const newReq: RequestOrder = {
-    ...order,
-    id: "req-" + Math.random().toString(36).substr(2, 9),
-    order_id: order.order_id || "ord-" + Math.random().toString(36).substr(2, 9),
-    jumlah_disetujui: null,
-    status: "Pending",
-    catatan_admin: "",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
-
-  requests.unshift(newReq);
-  setLocal("atk_requests", requests);
-
-  return {
-    ...newReq,
-    itemName: itm ? itm.nama_barang : "Barang",
-    itemSatuan: itm ? itm.satuan : "pcs"
-  };
+  const res = await fetch("/api/requests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(order)
+  });
+  if (res.ok) return await res.json();
+  const errData = await res.json().catch(() => ({}));
+  throw new Error(errData.error || "Gagal mengirim pesanan ke server.");
 }
 
 export async function processRequest(id: string, jumlah_disetujui: number, catatan_admin: string): Promise<boolean> {
   await checkBackend();
-  if (!useLocalFallback) {
-    try {
-      const res = await fetch(`/api/requests/${id}/process`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jumlah_disetujui, catatan_admin })
-      });
-      if (res.ok) return true;
-    } catch (e) {}
+  if (useLocalFallback) {
+    throw new Error("Server tidak tersedia. Tidak dapat memproses pesanan.");
   }
-
-  const requests = getLocal("atk_requests", DEFAULT_REQUESTS);
-  const items = getLocal("atk_items", DEFAULT_ITEMS);
-
-  const reqIdx = requests.findIndex(r => r.id === id);
-  if (reqIdx === -1) return false;
-
-  const reqObj = requests[reqIdx];
-  const itemIdx = items.findIndex(i => i.id === reqObj.item_id);
-  if (itemIdx === -1) return false;
-
-  // Deduct stock
-  items[itemIdx].stok -= jumlah_disetujui;
-  items[itemIdx].updated_at = new Date().toISOString();
-  setLocal("atk_items", items);
-
-  // Update request
-  requests[reqIdx].jumlah_disetujui = jumlah_disetujui;
-  requests[reqIdx].catatan_admin = catatan_admin;
-  requests[reqIdx].status = "Selesai";
-  requests[reqIdx].updated_at = new Date().toISOString();
-  requests[reqIdx].approved_at = new Date().toISOString();
-  setLocal("atk_requests", requests);
-
-  // Add stock log
-  const history = getLocal("atk_history", DEFAULT_HISTORY);
-  history.push({
-    id: "hst-" + Math.random().toString(36).substr(2, 9),
-    item_id: reqObj.item_id,
-    tipe: "pengurangan",
-    jumlah: jumlah_disetujui,
-    keterangan: `Disetujui untuk pemesan ${reqObj.nama_pemesan} (${reqObj.bidang}) - ID: ${id}`,
-    created_at: new Date().toISOString()
+  const res = await fetch(`/api/requests/${id}/process`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jumlah_disetujui, catatan_admin })
   });
-  setLocal("atk_history", history);
-
-  return true;
+  if (res.ok) return true;
+  const errData = await res.json().catch(() => ({}));
+  throw new Error(errData.error || "Gagal memproses pesanan.");
 }
 
 export async function rejectRequest(id: string, catatan_admin: string): Promise<boolean> {
   await checkBackend();
-  if (!useLocalFallback) {
-    try {
-      const res = await fetch(`/api/requests/${id}/reject`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ catatan_admin })
-      });
-      if (res.ok) return true;
-    } catch (e) {}
+  if (useLocalFallback) {
+    throw new Error("Server tidak tersedia. Tidak dapat menolak pesanan.");
   }
-
-  const requests = getLocal("atk_requests", DEFAULT_REQUESTS);
-  const reqIdx = requests.findIndex(r => r.id === id);
-  if (reqIdx === -1) return false;
-
-  requests[reqIdx].status = "Ditolak";
-  requests[reqIdx].catatan_admin = catatan_admin || "Ditolak admin";
-  requests[reqIdx].jumlah_disetujui = 0;
-  requests[reqIdx].updated_at = new Date().toISOString();
-  requests[reqIdx].approved_at = new Date().toISOString();
-  setLocal("atk_requests", requests);
-
-  return true;
+  const res = await fetch(`/api/requests/${id}/reject`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ catatan_admin })
+  });
+  if (res.ok) return true;
+  const errData = await res.json().catch(() => ({}));
+  throw new Error(errData.error || "Gagal menolak pesanan.");
 }
 
 export async function getSettings(): Promise<Setting> {

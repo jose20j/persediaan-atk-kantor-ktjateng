@@ -129,9 +129,8 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 5000);
       loadData();
-    } catch (err) {
-      console.error(err);
-      alert("Gagal meletakkan pesanan ATK!");
+    } catch (err: any) {
+      alert(err?.message || "Gagal meletakkan pesanan ATK!");
     } finally {
       setSubmittingOrder(false);
     }

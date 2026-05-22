@@ -6,7 +6,7 @@ import AdminItems from "./components/AdminItems";
 import AdminRequests from "./components/AdminRequests";
 import AdminSettings from "./components/AdminSettings";
 import ReportExport from "./components/ReportExport";
-import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests } from "./api";
+import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus } from "./api";
 import {
   LayoutDashboard,
   Package,
@@ -39,6 +39,7 @@ export default function App() {
   const [pendingCount, setPendingCount] = useState(0);
   const [showNewOrderNotif, setShowNewOrderNotif] = useState(false);
   const prevPendingCount = useRef(0);
+  const [backendStatus, setBackendStatus] = useState<"ok" | "supabase_missing" | "function_failed" | "offline">("offline");
 
   useEffect(() => {
     initializeLocal();
@@ -61,6 +62,7 @@ export default function App() {
     const poll = async () => {
       try {
         const reqs = await getRequests();
+        setBackendStatus(getBackendStatus());
         const pendingOrderIds = new Set(
           reqs.filter(r => r.status === "Pending").map(r => r.order_id || r.id)
         );
@@ -70,7 +72,9 @@ export default function App() {
         }
         prevPendingCount.current = count;
         setPendingCount(count);
-      } catch {}
+      } catch {
+        setBackendStatus(getBackendStatus());
+      }
     };
 
     poll();
@@ -312,6 +316,18 @@ export default function App() {
             </span>
           </div>
         </header>
+
+        {/* Backend connection warning */}
+        {backendStatus !== "ok" && backendStatus !== "offline" && (
+          <div className="bg-rose-50 border-b border-rose-200 px-6 py-3 flex items-center gap-3">
+            <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
+            <p className="text-xs font-semibold text-rose-700 flex-1">
+              {backendStatus === "supabase_missing"
+                ? "⚠️ Database belum terhubung. Tambahkan SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di Vercel Dashboard → Settings → Environment Variables, lalu redeploy."
+                : "⚠️ Server tidak dapat dijangkau. Data mungkin tidak tersinkron antar perangkat."}
+            </p>
+          </div>
+        )}
 
         {/* New order notification toast */}
         {showNewOrderNotif && (
