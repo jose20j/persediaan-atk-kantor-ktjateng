@@ -43,6 +43,12 @@ export default function AdminRequests() {
   const [statusFilter, setStatusFilter] = useState("Semua");
   const [deptFilter, setDeptFilter] = useState("Semua");
   const [searchTerm, setSearchTerm] = useState("");
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   const [selectedGroup, setSelectedGroup] = useState<OrderGroup | null>(null);
   const [groupForms, setGroupForms] = useState<Record<string, ItemForm>>({});
@@ -89,6 +95,11 @@ export default function AdminRequests() {
   }, [requests]);
 
   const filteredGroups = useMemo(() => {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
     return orderGroups.filter(group => {
       const itemNames = group.requests.map(r => (r.itemName || "").toLowerCase()).join(" ");
       const matchesSearch =
@@ -102,9 +113,12 @@ export default function AdminRequests() {
       else if (statusFilter === "Selesai") matchesStatus = group.status === "Selesai";
       else if (statusFilter === "Ditolak") matchesStatus = group.status === "Ditolak";
 
-      return matchesSearch && matchesDept && matchesStatus;
+      const groupDate = new Date(group.created_at);
+      const matchesDate = groupDate >= start && groupDate <= end;
+
+      return matchesSearch && matchesDept && matchesStatus && matchesDate;
     });
-  }, [orderGroups, searchTerm, deptFilter, statusFilter]);
+  }, [orderGroups, searchTerm, deptFilter, statusFilter, startDate, endDate]);
 
   const handleOpenProcess = (group: OrderGroup) => {
     const forms: Record<string, ItemForm> = {};
@@ -242,6 +256,24 @@ export default function AdminRequests() {
               <option value="Semua">Semua Bidang</option>
               {departments.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
+          </div>
+        </div>
+        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-4 flex-wrap">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+            <Calendar className="h-4 w-4 text-teal-600" /> Rentang Tanggal:
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="date" value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-xl font-mono focus:border-teal-500 focus:outline-hidden"
+            />
+            <span className="text-slate-400 text-xs font-bold">s/d</span>
+            <input
+              type="date" value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-xl font-mono focus:border-teal-500 focus:outline-hidden"
+            />
           </div>
         </div>
       </div>

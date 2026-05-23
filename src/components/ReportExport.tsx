@@ -107,11 +107,19 @@ export default function ReportExport() {
 
   // 3. Data Processor: Rekap per Bidang
   const getRekapBidangData = () => {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
     const bidangStats: {
       [bidang: string]: { totalRequests: number; totalDiminta: number; totalDisetujui: number }
     } = {};
 
-    requests.forEach(req => {
+    requests.filter(req => {
+      const dt = new Date(req.created_at);
+      return dt >= start && dt <= end;
+    }).forEach(req => {
       const bName = req.bidang || "Lain-Lain";
       if (!bidangStats[bName]) {
         bidangStats[bName] = { totalRequests: 0, totalDiminta: 0, totalDisetujui: 0 };
@@ -153,12 +161,19 @@ export default function ReportExport() {
 
   // 5. Data Processor: Selisih Permintaan (Analisis barang sering kurang)
   const getSelisihPermintaanData = () => {
-    // We analyze requests where status is finished but jumlah_disetujui < jumlah_diminta
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
     const itemAnalysis: {
       [id: string]: { name: string; category: string; occurrences: number; totalDifference: number }
     } = {};
 
-    requests.forEach(req => {
+    requests.filter(req => {
+      const dt = new Date(req.created_at);
+      return dt >= start && dt <= end;
+    }).forEach(req => {
       if (req.status === "Selesai" && req.jumlah_disetujui !== null) {
         const diff = req.jumlah_diminta - req.jumlah_disetujui;
         if (diff > 0) {
@@ -190,17 +205,18 @@ export default function ReportExport() {
 
   // Helper title for report names
   const getReportTitle = () => {
+    const range = `(${startDate} s/d ${endDate})`;
     switch (selectedReportType) {
       case 1:
         return "Laporan Stok ATK Saat Ini";
       case 2:
-        return `Laporan Riwayat Permintaan (${startDate} s/d ${endDate})`;
+        return `Laporan Riwayat Permintaan ${range}`;
       case 3:
-        return "Laporan Rekap Kuantitas per Bidang";
+        return `Laporan Rekap Kuantitas per Bidang ${range}`;
       case 4:
         return "Laporan Barang Kritis Stok Menipis";
       case 5:
-        return "Laporan Analisis Selisih Pemenuhan Barang";
+        return `Laporan Analisis Selisih Pemenuhan Barang ${range}`;
     }
   };
 
@@ -376,31 +392,34 @@ export default function ReportExport() {
         ))}
       </div>
 
-      {/* Date filter if Riwayat Transaksi selected */}
-      {selectedReportType === 2 && (
-        <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 animate-in slide-in-from-top-2 duration-100">
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 shrink-0">
-              <Calendar className="h-4.5 w-4.5 text-teal-600" /> Pilih Rentang Tanggal Riwayat:
-            </span>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-white border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-lg w-full sm:w-auto font-mono"
-              />
-              <span className="text-slate-400 text-xs font-bold">s/d</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-white border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-lg w-full sm:w-auto font-mono"
-              />
-            </div>
+      {/* Date Range Filter — always visible for all report types */}
+      <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200">
+        <div className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 shrink-0">
+            <Calendar className="h-4.5 w-4.5 text-teal-600" /> Filter Rentang Tanggal:
+          </span>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-white border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-lg w-full sm:w-auto font-mono"
+            />
+            <span className="text-slate-400 text-xs font-bold">s/d</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-white border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-lg w-full sm:w-auto font-mono"
+            />
           </div>
+          {(selectedReportType === 1 || selectedReportType === 4) && (
+            <span className="text-[11px] text-slate-400 italic shrink-0">
+              * Laporan stok menampilkan kondisi barang saat ini
+            </span>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Table Preview and Export buttons */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
