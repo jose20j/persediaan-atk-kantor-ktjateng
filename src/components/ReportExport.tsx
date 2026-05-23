@@ -21,14 +21,20 @@ export default function ReportExport() {
   const [settings, setSettings] = useState<Setting>({ nomor_whatsapp_admin: "", nama_kantor: "" });
   const [loading, setLoading] = useState(true);
 
-  // Date filters for Request History Report
+  const toLocalDateStr = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  };
+
+  // Date filters — use local date components to avoid UTC-midnight parsing issues
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   });
   const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split("T")[0];
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   });
 
   // Chosen Report Type
@@ -75,14 +81,9 @@ export default function ReportExport() {
 
   // 2. Data Processor: Riwayat Permintaan with date check
   const getRiwayatData = () => {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
     const filtered = requests.filter(req => {
-      const dt = new Date(req.created_at);
-      return dt >= start && dt <= end;
+      const d = toLocalDateStr(req.created_at);
+      return d >= startDate && d <= endDate;
     });
 
     return filtered.map((req, idx) => {
@@ -107,18 +108,13 @@ export default function ReportExport() {
 
   // 3. Data Processor: Rekap per Bidang
   const getRekapBidangData = () => {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
     const bidangStats: {
       [bidang: string]: { totalRequests: number; totalDiminta: number; totalDisetujui: number }
     } = {};
 
     requests.filter(req => {
-      const dt = new Date(req.created_at);
-      return dt >= start && dt <= end;
+      const d = toLocalDateStr(req.created_at);
+      return d >= startDate && d <= endDate;
     }).forEach(req => {
       const bName = req.bidang || "Lain-Lain";
       if (!bidangStats[bName]) {
@@ -161,18 +157,13 @@ export default function ReportExport() {
 
   // 5. Data Processor: Selisih Permintaan (Analisis barang sering kurang)
   const getSelisihPermintaanData = () => {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
     const itemAnalysis: {
       [id: string]: { name: string; category: string; occurrences: number; totalDifference: number }
     } = {};
 
     requests.filter(req => {
-      const dt = new Date(req.created_at);
-      return dt >= start && dt <= end;
+      const d = toLocalDateStr(req.created_at);
+      return d >= startDate && d <= endDate;
     }).forEach(req => {
       if (req.status === "Selesai" && req.jumlah_disetujui !== null) {
         const diff = req.jumlah_diminta - req.jumlah_disetujui;

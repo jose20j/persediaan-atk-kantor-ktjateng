@@ -46,9 +46,12 @@ export default function AdminRequests() {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 3);
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  });
 
   const [selectedGroup, setSelectedGroup] = useState<OrderGroup | null>(null);
   const [groupForms, setGroupForms] = useState<Record<string, ItemForm>>({});
@@ -94,12 +97,12 @@ export default function AdminRequests() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [requests]);
 
-  const filteredGroups = useMemo(() => {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+  const toLocalDateStr = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  };
 
+  const filteredGroups = useMemo(() => {
     return orderGroups.filter(group => {
       const itemNames = group.requests.map(r => (r.itemName || "").toLowerCase()).join(" ");
       const matchesSearch =
@@ -113,8 +116,8 @@ export default function AdminRequests() {
       else if (statusFilter === "Selesai") matchesStatus = group.status === "Selesai";
       else if (statusFilter === "Ditolak") matchesStatus = group.status === "Ditolak";
 
-      const groupDate = new Date(group.created_at);
-      const matchesDate = groupDate >= start && groupDate <= end;
+      const groupDateStr = toLocalDateStr(group.created_at);
+      const matchesDate = groupDateStr >= startDate && groupDateStr <= endDate;
 
       return matchesSearch && matchesDept && matchesStatus && matchesDate;
     });
