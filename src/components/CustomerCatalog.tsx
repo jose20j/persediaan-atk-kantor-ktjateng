@@ -3,7 +3,6 @@ import kejaksaanLogo from "../assets/images/kejaksaan_logo_1779373081640.png";
 import { Item, Setting, Bidang, Customer } from "../types";
 import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";
-import { generateOrderPDF } from "../lib/generatePDF";
 
 interface CustomerCatalogProps {
   customer: Customer;
@@ -123,24 +122,6 @@ export default function CustomerCatalog({ customer, onSwappedToAdmin, onViewOrde
       }));
 
       await Promise.all(requestPayloads.map(payload => createRequest(payload)));
-
-      try {
-        generateOrderPDF({
-          items: cart.map(c => ({
-            nama_barang: c.item.nama_barang,
-            satuan: c.item.satuan,
-            jumlah_diminta: c.quantity,
-          })),
-          nama_pemesan: orderForm.nama_pemesan,
-          bidang: orderForm.bidang || "Umum",
-          keterangan_customer: orderForm.keterangan_customer,
-          officeName: settings.nama_kantor || "Portal ATK Kantor",
-          orderId,
-          status: "Pending",
-        });
-      } catch (pdfErr) {
-        console.error("Gagal menghasilkan PDF:", pdfErr);
-      }
 
       setCart([]);
       setShowCartModal(false);

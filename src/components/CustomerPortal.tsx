@@ -127,9 +127,9 @@ export default function CustomerPortal({ customer, officeName, onLogout, onBrows
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [orders]);
 
-  const handleDownloadPDF = (group: OrderGroup) => {
+  const handleDownloadPDF = async (group: OrderGroup) => {
     const firstItem = group.items[0];
-    generateOrderPDF({
+    await generateOrderPDF({
       items: group.items.map(r => ({
         nama_barang:     r.itemName    || r.item_id,
         satuan:          r.itemSatuan  || "unit",
@@ -144,6 +144,7 @@ export default function CustomerPortal({ customer, officeName, onLogout, onBrows
       orderId:           group.order_id,
       status:            group.overallStatus,
       createdAt:         group.created_at,
+      logoUrl:           kejaksaanLogo,
     });
   };
 
