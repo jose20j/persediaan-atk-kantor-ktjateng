@@ -192,8 +192,11 @@ export async function generateOrderPDF(order: PDFOrderData) {
   const showApproved = order.status !== "Pending";
   const col0x = ml + 6;
   const col1x = ml + 32;
-  const col2x = ml + cw - (showApproved ? 160 : 80);
-  const col3x = ml + cw - (showApproved ? 90 : 10);
+  // Satuan left-aligned; leave enough room for right-side numeric columns
+  const col2x = showApproved ? ml + cw - 220 : ml + cw - 140;
+  // Jml Diminta right-aligned edge
+  const col3x = showApproved ? ml + cw - 80  : ml + cw - 5;
+  // Jml Disetujui right-aligned edge
   const col4x = ml + cw - 5;
 
   doc.setFillColor(...teal);

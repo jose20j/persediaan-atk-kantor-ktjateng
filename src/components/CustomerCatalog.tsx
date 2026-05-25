@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import kejaksaanLogo from "../assets/images/kejaksaan_logo_1779373081640.png";
+import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Item, Setting, Bidang, Customer } from "../types";
 import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";

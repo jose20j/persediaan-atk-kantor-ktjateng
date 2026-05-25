@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import kejaksaanLogo from "./assets/images/kejaksaan_logo_1779373081640.png";
+import kejaksaanLogo from "./assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import CustomerLogin from "./components/CustomerLogin";
 import CustomerCatalog from "./components/CustomerCatalog";
 import CustomerPortal from "./components/CustomerPortal";

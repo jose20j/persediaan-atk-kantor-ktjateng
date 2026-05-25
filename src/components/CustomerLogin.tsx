@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import kejaksaanLogo from "../assets/images/kejaksaan_logo_1779373081640.png";
+import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Customer, Bidang } from "../types";
 import { loginCustomer, registerCustomer, getDepartments } from "../api";
 import { User, Lock, ArrowRight, UserPlus, LogIn, Building } from "lucide-react";

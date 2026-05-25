@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import kejaksaanLogo from "../assets/images/kejaksaan_logo_1779373081640.png";
+import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Customer, RequestOrder } from "../types";
 import { getCustomerOrders } from "../api";
 import { generateOrderPDF } from "../lib/generatePDF";
