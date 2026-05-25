@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
+import stempelDisetujui from "../assets/images/STEMPEL DISETUJUI.png";
 import { Customer, RequestOrder } from "../types";
 import { getCustomerOrders } from "../api";
 import { generateOrderPDF } from "../lib/generatePDF";
@@ -145,6 +146,7 @@ export default function CustomerPortal({ customer, officeName, onLogout, onBrows
       status:            group.overallStatus,
       createdAt:         group.created_at,
       logoUrl:           kejaksaanLogo,
+      stampUrl:          group.overallStatus === "Selesai" ? stempelDisetujui : undefined,
     });
   };
 

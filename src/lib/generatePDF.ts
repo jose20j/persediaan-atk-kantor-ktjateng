@@ -281,8 +281,9 @@ export async function generateOrderPDF(order: PDFOrderData) {
   doc.setTextColor(...mid);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.text("Pemesan,", ml + sigColW / 2, y, { align: "center" });
-  doc.text("Disetujui Admin ATK,", ml + sigColW + sigColW / 2, y, { align: "center" });
+  const sigLabelY = y;  // save label baseline before advancing y
+  doc.text("Pemesan,", ml + sigColW / 2, sigLabelY, { align: "center" });
+  doc.text("Disetujui Admin ATK,", ml + sigColW + sigColW / 2, sigLabelY, { align: "center" });
   y += 50;
 
   // Pemesan name (left column)
@@ -295,11 +296,11 @@ export async function generateOrderPDF(order: PDFOrderData) {
   doc.setTextColor(...mid);
   doc.text(order.bidang || "Umum", ml + sigColW / 2, y + 12, { align: "center" });
 
-  // Stamp (right column) — only when Selesai and stamp is available
+  // Stamp anchored just below the label text (not below the signature gap)
   if (order.status === "Selesai" && stampDataUrl) {
     const stampSize = 95;
     const stampX = ml + sigColW + (sigColW - stampSize) / 2;
-    const stampY = y - 48;
+    const stampY = sigLabelY + 4;  // 4pt below label baseline = touching
     doc.addImage(stampDataUrl, "PNG", stampX, stampY, stampSize, stampSize);
   }
 
