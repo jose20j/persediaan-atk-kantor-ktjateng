@@ -17,6 +17,7 @@ export interface PDFOrderData {
   orderId: string;
   status: "Pending" | "Diproses" | "Selesai" | "Ditolak";
   createdAt?: string;
+  logoUrl?: string;
 }
 
 const STATUS_CONFIG = {
@@ -26,18 +27,38 @@ const STATUS_CONFIG = {
   Ditolak:  { bg: [254, 226, 226] as [number,number,number], text: [185, 28,  28]  as [number,number,number], label: "Ditolak" },
 };
 
-export function generateOrderPDF(order: PDFOrderData) {
+async function fetchLogoDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function generateOrderPDF(order: PDFOrderData) {
+  let logoDataUrl: string | null = null;
+  if (order.logoUrl) {
+    logoDataUrl = await fetchLogoDataUrl(order.logoUrl);
+  }
+
   const doc = new jsPDF("p", "pt", "a4");
   const pw = 595;
   const ml = 40;
   const mr = 40;
   const cw = pw - ml - mr;
 
-  const teal:  [number,number,number] = [13,  78,  74];
-  const white: [number,number,number] = [255, 255, 255];
-  const dark:  [number,number,number] = [15,  23,  42];
-  const mid:   [number,number,number] = [71,  85,  105];
-  const light: [number,number,number] = [226, 232, 240];
+  const teal:      [number,number,number] = [13,  78,  74];
+  const white:     [number,number,number] = [255, 255, 255];
+  const dark:      [number,number,number] = [15,  23,  42];
+  const mid:       [number,number,number] = [71,  85,  105];
+  const light:     [number,number,number] = [226, 232, 240];
   const tealLight: [number,number,number] = [204, 235, 234];
 
   const createdDate = order.createdAt ? new Date(order.createdAt) : new Date();
@@ -46,43 +67,65 @@ export function generateOrderPDF(order: PDFOrderData) {
   let y = 0;
 
   // ── HEADER ──────────────────────────────────────────────────
+  const headerH = 76;
   doc.setFillColor(...teal);
-  doc.rect(0, 0, pw, 72, "F");
+  doc.rect(0, 0, pw, headerH, "F");
 
+  // Logo on LEFT side of header
+  const logoSize = 52;
+  const logoY = (headerH - logoSize) / 2;
+  let textStartX = ml;
+  if (logoDataUrl) {
+    const logoX = ml;
+    doc.setFillColor(255, 255, 255);
+    doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 2, "F");
+    doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoSize, logoSize);
+    textStartX = ml + logoSize + 10;
+  }
+
+  // Office name and subtitle (no "No. Pesanan" on right)
   doc.setTextColor(...white);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
-  doc.text((order.officeName || "Portal ATK Kantor").toUpperCase(), ml, 26);
-
+  const officeLine = doc.splitTextToSize(
+    (order.officeName || "Portal ATK Kantor").toUpperCase(),
+    pw - mr - textStartX
+  );
+  doc.text(officeLine, textStartX, 26);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.text("Formulir Pesanan ATK Digital", ml, 43);
+  doc.text("Formulir Pesanan ATK Digital", textStartX, officeLine.length > 1 ? 52 : 44);
 
-  // No. Pesanan (top right)
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.text("No. Pesanan", pw - mr, 22, { align: "right" });
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text(order.orderId.toUpperCase(), pw - mr, 36, { align: "right" });
+  y = headerH + 20;
 
-  y = 96;
-
-  // ── TITLE + STATUS BADGE (same row) ─────────────────────────
+  // ── TITLE ───────────────────────────────────────────────────
   doc.setTextColor(...dark);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.text("BUKTI PERMINTAAN ATK", ml, y);
 
-  // Status badge (right-aligned on title row)
-  const badgeW = 130;
-  const badgeX = pw - mr - badgeW;
-  doc.setFillColor(...statusCfg.bg);
-  doc.roundedRect(badgeX, y - 14, badgeW, 18, 4, 4, "F");
-  doc.setTextColor(...statusCfg.text);
+  // ── STATUS BADGE (right-aligned, auto-sized to text) ────────
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.text("● " + statusCfg.label, badgeX + badgeW / 2, y - 2, { align: "center" });
+  doc.setFontSize(8);
+  const badgeLabel = statusCfg.label;
+  const textW  = doc.getTextWidth(badgeLabel);
+  const dotR   = 2.5;
+  const padH   = 10;
+  const badgeH = 18;
+  // padH (left) + dot diameter + gap + text + padH (right)
+  const badgeW = padH + dotR * 2 + 6 + textW + padH;
+  const badgeX = pw - mr - badgeW;
+  const badgeTop = y - badgeH + 2;
+
+  doc.setFillColor(...statusCfg.bg);
+  doc.roundedRect(badgeX, badgeTop, badgeW, badgeH, 4, 4, "F");
+
+  // Filled circle dot — avoids the %İ Unicode rendering bug
+  doc.setFillColor(...statusCfg.text);
+  doc.circle(badgeX + padH + dotR, badgeTop + badgeH / 2, dotR, "F");
+
+  doc.setTextColor(...statusCfg.text);
+  doc.text(badgeLabel, badgeX + padH + dotR * 2 + 6, badgeTop + badgeH / 2 + 3);
 
   y += 14;
 
@@ -100,46 +143,51 @@ export function generateOrderPDF(order: PDFOrderData) {
   // Divider
   doc.setDrawColor(...light);
   doc.line(ml, y, pw - mr, y);
-  y += 18;
+  y += 16;
 
   // ── INFORMASI PEMESAN ────────────────────────────────────────
+  const sectionH = 20;
   doc.setFillColor(...tealLight);
-  doc.rect(ml, y, cw, 16, "F");
+  doc.rect(ml, y, cw, sectionH, "F");
   doc.setTextColor(...teal);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("INFORMASI PEMESAN", ml + 6, y + 11);
-  y += 20;
+  doc.setFontSize(8.5);
+  doc.text("INFORMASI PEMESAN", ml + 8, y + sectionH / 2 + 3);
+  y += sectionH + 14;
 
   const infoRows: [string, string][] = [
-    ["Nama Pemesan",     order.nama_pemesan],
+    ["Nama Pemesan",        order.nama_pemesan],
     ["Bidang / Departemen", order.bidang || "Umum"],
-    ["Tanggal Permintaan", createdDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })],
-    ["Keterangan",       order.keterangan_customer || "-"],
+    ["Tanggal Permintaan",  createdDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })],
+    ["Keterangan",          order.keterangan_customer || "-"],
   ];
   const lw = 145;
-  infoRows.forEach(([label, val]) => {
+  infoRows.forEach(([label, val], i) => {
+    if (i % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(ml, y - 11, cw, 18, "F");
+    }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(...mid);
-    doc.text(label, ml + 6, y);
+    doc.text(label, ml + 8, y);
     doc.text(":", ml + lw, y);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...dark);
-    const lines = doc.splitTextToSize(val, cw - lw - 14);
+    const lines = doc.splitTextToSize(val, cw - lw - 16);
     doc.text(lines, ml + lw + 10, y);
-    y += Math.max(16, lines.length * 13);
+    y += Math.max(18, lines.length * 14);
   });
   y += 10;
 
   // ── BARANG YANG DIPESAN ──────────────────────────────────────
   doc.setFillColor(...tealLight);
-  doc.rect(ml, y, cw, 16, "F");
+  doc.rect(ml, y, cw, sectionH, "F");
   doc.setTextColor(...teal);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("BARANG YANG DIPESAN", ml + 6, y + 11);
-  y += 20;
+  doc.setFontSize(8.5);
+  doc.text("BARANG YANG DIPESAN", ml + 8, y + sectionH / 2 + 3);
+  y += sectionH + 6;
 
   const showApproved = order.status !== "Pending";
   const col0x = ml + 6;
@@ -148,16 +196,15 @@ export function generateOrderPDF(order: PDFOrderData) {
   const col3x = ml + cw - (showApproved ? 90 : 10);
   const col4x = ml + cw - 5;
 
-  // Table header
   doc.setFillColor(...teal);
   doc.rect(ml, y, cw, 22, "F");
   doc.setTextColor(...white);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
-  doc.text("No", col0x, y + 15);
-  doc.text("Nama Barang", col1x, y + 15);
-  doc.text("Satuan", col2x, y + 15);
-  doc.text("Jml Diminta", col3x, y + 15, { align: "right" });
+  doc.text("No",           col0x, y + 15);
+  doc.text("Nama Barang",  col1x, y + 15);
+  doc.text("Satuan",       col2x, y + 15);
+  doc.text("Jml Diminta",  col3x, y + 15, { align: "right" });
   if (showApproved) doc.text("Jml Disetujui", col4x, y + 15, { align: "right" });
   y += 22;
 
@@ -176,18 +223,17 @@ export function generateOrderPDF(order: PDFOrderData) {
     if (showApproved) {
       const approved = item.jumlah_disetujui != null ? String(item.jumlah_disetujui) : "-";
       doc.setFont("helvetica", "bold");
-      if (item.jumlah_disetujui != null && item.jumlah_disetujui < item.jumlah_diminta) {
-        doc.setTextColor(185, 28, 28);
-      } else {
-        doc.setTextColor(4, 120, 87);
-      }
+      doc.setTextColor(
+        item.jumlah_disetujui != null && item.jumlah_disetujui < item.jumlah_diminta ? 185 : 4,
+        item.jumlah_disetujui != null && item.jumlah_disetujui < item.jumlah_diminta ? 28  : 120,
+        item.jumlah_disetujui != null && item.jumlah_disetujui < item.jumlah_diminta ? 28  : 87
+      );
       doc.text(approved, col4x, y + 15, { align: "right" });
       doc.setTextColor(...dark);
     }
     y += 22;
   });
 
-  // Table border
   doc.setDrawColor(...light);
   doc.rect(ml, y - order.items.length * 22 - 22, cw, order.items.length * 22 + 22, "S");
   y += 12;
@@ -196,63 +242,63 @@ export function generateOrderPDF(order: PDFOrderData) {
   if (order.catatan_admin) {
     doc.setFillColor(255, 251, 235);
     doc.setDrawColor(253, 230, 138);
-    doc.roundedRect(ml, y, cw, 30, 3, 3, "FD");
+    const catatanLines = doc.splitTextToSize(order.catatan_admin, cw - 16);
+    const catatanH = 14 + catatanLines.length * 11 + 10;
+    doc.roundedRect(ml, y, cw, catatanH, 3, 3, "FD");
     doc.setTextColor(146, 64, 14);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
-    doc.text("Catatan Admin:", ml + 8, y + 10);
+    doc.text("Catatan Admin:", ml + 8, y + 11);
     doc.setFont("helvetica", "normal");
-    const catatanLines = doc.splitTextToSize(order.catatan_admin, cw - 16);
-    doc.text(catatanLines, ml + 8, y + 21);
-    y += 30 + Math.max(0, (catatanLines.length - 1) * 10) + 10;
+    doc.text(catatanLines, ml + 8, y + 22);
+    y += catatanH + 10;
   } else if (order.status === "Pending") {
     doc.setFillColor(240, 253, 244);
     doc.setDrawColor(167, 243, 208);
-    doc.roundedRect(ml, y, cw, 28, 3, 3, "FD");
-    doc.setTextColor(6, 95, 70);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
     const noteLines = doc.splitTextToSize(
       "Catatan: Jumlah yang disetujui akan diisi oleh Admin ATK setelah memverifikasi stok yang tersedia. Anda akan menerima notifikasi setelah pesanan dikonfirmasi.",
       cw - 16
     );
+    const noteH = 10 + noteLines.length * 11 + 8;
+    doc.roundedRect(ml, y, cw, noteH, 3, 3, "FD");
+    doc.setTextColor(6, 95, 70);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
     doc.text(noteLines, ml + 8, y + 12);
-    y += 36 + Math.max(0, (noteLines.length - 2) * 10);
+    y += noteH + 10;
   }
-  y += 16;
+  y += 14;
 
-  // ── SIGNATURE AREA ───────────────────────────────────────────
-  const sigColW = cw / 3;
-  const sigLabels = ["Pemesan,", "Mengetahui,", "Disetujui Admin ATK,"];
-  const sigSubs   = [order.nama_pemesan, "( ________________ )\nKepala Bidang", "( ________________ )\nAdmin ATK"];
+  // ── SIGNATURE AREA (2 columns: Pemesan and Admin ATK) ────────
+  const sigColW = cw / 2;
+  const sigLabels = ["Pemesan,", "Disetujui Admin ATK,"];
+  const sigSubs   = [order.nama_pemesan, "( ________________ )\nAdmin ATK"];
 
   doc.setTextColor(...mid);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-
   sigLabels.forEach((label, i) => {
-    const x = ml + i * sigColW;
-    doc.text(label, x + sigColW / 2, y, { align: "center" });
+    doc.text(label, ml + i * sigColW + sigColW / 2, y, { align: "center" });
   });
   y += 50;
 
   sigSubs.forEach((sub, i) => {
-    const x = ml + i * sigColW;
-    const lines = sub.split("\n");
+    const x = ml + i * sigColW + sigColW / 2;
     if (i === 0) {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...dark);
-      doc.text(lines[0], x + sigColW / 2, y, { align: "center" });
+      doc.setFontSize(8.5);
+      doc.text(sub, x, y, { align: "center" });
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(...mid);
-      doc.text(order.bidang || "Umum", x + sigColW / 2, y + 12, { align: "center" });
+      doc.text(order.bidang || "Umum", x, y + 12, { align: "center" });
     } else {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
       doc.setTextColor(...mid);
-      lines.forEach((line, li) => {
-        doc.text(line, x + sigColW / 2, y + li * 12, { align: "center" });
+      sub.split("\n").forEach((line, li) => {
+        doc.text(line, x, y + li * 12, { align: "center" });
       });
     }
   });
