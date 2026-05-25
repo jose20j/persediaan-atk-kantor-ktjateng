@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
+import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
+import stempelDisetujui from "../assets/images/STEMPEL DISETUJUI.png";
 import { RequestOrder, Item } from "../types";
-import { getRequests, getItems, processRequest, rejectRequest, completeRequest, getDepartments } from "../api";
+import { getRequests, getItems, processRequest, rejectRequest, completeRequest, getDepartments, getSettings } from "../api";
+import { generateOrderPDF } from "../lib/generatePDF";
 import {
   FileCheck, Search, AlertTriangle, FileText, User, MapPin, Info,
   Layers, ChevronRight, Package, Calendar, MessageSquare,
-  X, CheckCircle, XCircle, Clock, ShoppingBag, Truck
+  X, CheckCircle, XCircle, Clock, ShoppingBag, Truck, Download
 } from "lucide-react";
 
 type GroupStatus = "Pending" | "Diproses" | "Selesai" | "Ditolak" | "Sebagian";
@@ -40,6 +43,7 @@ export default function AdminRequests() {
   const [requests, setRequests] = useState<RequestOrder[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
+  const [officeName, setOfficeName] = useState("Portal ATK Kantor");
   const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState("Semua");
@@ -62,12 +66,13 @@ export default function AdminRequests() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [fetchedRequests, fetchedItems, fetchedDepts] = await Promise.all([
-        getRequests(), getItems(), getDepartments()
+      const [fetchedRequests, fetchedItems, fetchedDepts, fetchedSettings] = await Promise.all([
+        getRequests(), getItems(), getDepartments(), getSettings()
       ]);
       setRequests(fetchedRequests);
       setItems(fetchedItems);
       setDepartments(fetchedDepts.map(d => d.nama_bidang));
+      setOfficeName(fetchedSettings.nama_kantor || "Portal ATK Kantor");
     } catch (err) {
       console.error(err);
     } finally {
@@ -215,6 +220,27 @@ export default function AdminRequests() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleDownloadPDF = async (group: OrderGroup) => {
+    await generateOrderPDF({
+      items: group.requests.map(r => ({
+        nama_barang:      r.itemName    || r.item_id,
+        satuan:           r.itemSatuan  || "unit",
+        jumlah_diminta:   r.jumlah_diminta,
+        jumlah_disetujui: r.jumlah_disetujui,
+      })),
+      nama_pemesan:       group.pemesan,
+      bidang:             group.bidang,
+      keterangan_customer: group.keterangan_customer,
+      catatan_admin:      group.requests.map(r => r.catatan_admin).filter(Boolean).join("; ") || undefined,
+      officeName,
+      orderId:            group.order_id,
+      status:             "Selesai",
+      createdAt:          group.created_at,
+      logoUrl:            kejaksaanLogo,
+      stampUrl:           stempelDisetujui,
+    });
   };
 
   const StatusBadge = ({ status }: { status: GroupStatus }) => {
@@ -388,7 +414,15 @@ export default function AdminRequests() {
                             <Truck className="h-3.5 w-3.5" /> Selesaikan
                           </button>
                         )}
-                        {!group.hasPending && !group.hasBeingProcessed && (
+                        {group.status === "Selesai" && (
+                          <button
+                            onClick={() => handleDownloadPDF(group)}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Bukti PDF
+                          </button>
+                        )}
+                        {!group.hasPending && !group.hasBeingProcessed && group.status !== "Selesai" && (
                           <span className="text-xs text-slate-400 italic">—</span>
                         )}
                       </div>

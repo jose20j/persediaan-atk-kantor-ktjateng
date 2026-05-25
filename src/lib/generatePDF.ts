@@ -18,6 +18,7 @@ export interface PDFOrderData {
   status: "Pending" | "Diproses" | "Selesai" | "Ditolak";
   createdAt?: string;
   logoUrl?: string;
+  stampUrl?: string;
 }
 
 const STATUS_CONFIG = {
@@ -46,6 +47,10 @@ export async function generateOrderPDF(order: PDFOrderData) {
   let logoDataUrl: string | null = null;
   if (order.logoUrl) {
     logoDataUrl = await fetchLogoDataUrl(order.logoUrl);
+  }
+  let stampDataUrl: string | null = null;
+  if (order.stampUrl) {
+    stampDataUrl = await fetchLogoDataUrl(order.stampUrl);
   }
 
   const doc = new jsPDF("p", "pt", "a4");
@@ -272,37 +277,31 @@ export async function generateOrderPDF(order: PDFOrderData) {
 
   // ── SIGNATURE AREA (2 columns: Pemesan and Admin ATK) ────────
   const sigColW = cw / 2;
-  const sigLabels = ["Pemesan,", "Disetujui Admin ATK,"];
-  const sigSubs   = [order.nama_pemesan, "( ________________ )\nAdmin ATK"];
 
   doc.setTextColor(...mid);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  sigLabels.forEach((label, i) => {
-    doc.text(label, ml + i * sigColW + sigColW / 2, y, { align: "center" });
-  });
+  doc.text("Pemesan,", ml + sigColW / 2, y, { align: "center" });
+  doc.text("Disetujui Admin ATK,", ml + sigColW + sigColW / 2, y, { align: "center" });
   y += 50;
 
-  sigSubs.forEach((sub, i) => {
-    const x = ml + i * sigColW + sigColW / 2;
-    if (i === 0) {
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...dark);
-      doc.setFontSize(8.5);
-      doc.text(sub, x, y, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(...mid);
-      doc.text(order.bidang || "Umum", x, y + 12, { align: "center" });
-    } else {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5);
-      doc.setTextColor(...mid);
-      sub.split("\n").forEach((line, li) => {
-        doc.text(line, x, y + li * 12, { align: "center" });
-      });
-    }
-  });
+  // Pemesan name (left column)
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...dark);
+  doc.setFontSize(8.5);
+  doc.text(order.nama_pemesan, ml + sigColW / 2, y, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...mid);
+  doc.text(order.bidang || "Umum", ml + sigColW / 2, y + 12, { align: "center" });
+
+  // Stamp (right column) — only when Selesai and stamp is available
+  if (order.status === "Selesai" && stampDataUrl) {
+    const stampSize = 95;
+    const stampX = ml + sigColW + (sigColW - stampSize) / 2;
+    const stampY = y - 48;
+    doc.addImage(stampDataUrl, "PNG", stampX, stampY, stampSize, stampSize);
+  }
 
   // ── FOOTER ───────────────────────────────────────────────────
   const footerY = 800;
