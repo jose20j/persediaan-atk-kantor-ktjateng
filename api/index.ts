@@ -30,7 +30,56 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// AUTH
+// CUSTOMER AUTH
+app.post("/api/auth/customer/register", async (req, res) => {
+  try {
+    const { username, password, nama_lengkap, bidang } = req.body;
+    if (!username?.trim() || !password?.trim() || !nama_lengkap?.trim() || !bidang?.trim())
+      return res.status(400).json({ error: "Semua field wajib diisi." });
+    const { data: existing } = await db().from("customers").select("id").eq("username", username.trim()).maybeSingle();
+    if (existing) return res.status(409).json({ error: "Username sudah digunakan, pilih username lain." });
+    const newCustomer = {
+      id: genId("cus"), username: username.trim(), password: password.trim(),
+      nama_lengkap: nama_lengkap.trim(), bidang: bidang.trim(),
+      created_at: new Date().toISOString(),
+    };
+    const { data, error } = await db().from("customers").insert(newCustomer).select("id, username, nama_lengkap, bidang, created_at").single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/auth/customer/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username dan password wajib diisi." });
+    const { data, error } = await db().from("customers")
+      .select("id, username, nama_lengkap, bidang, created_at")
+      .eq("username", username.trim())
+      .eq("password", password.trim())
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(401).json({ error: "Username atau password salah." });
+    res.json(data);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/customer/orders", async (req, res) => {
+  try {
+    const { customer_id } = req.query;
+    if (!customer_id) return res.status(400).json({ error: "customer_id diperlukan." });
+    const { data, error } = await db().from("requests")
+      .select("*, items(nama_barang, satuan)")
+      .eq("customer_id", customer_id)
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json((data || []).map((r: any) => ({
+      ...r, itemName: r.items?.nama_barang || "Barang Terhapus", itemSatuan: r.items?.satuan || "unit", items: undefined,
+    })));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ADMIN AUTH
 app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -165,7 +214,7 @@ app.get("/api/requests", async (_req, res) => {
 
 app.post("/api/requests", async (req, res) => {
   try {
-    const { item_id, nama_pemesan, bidang, jumlah_diminta, keterangan_customer, order_id } = req.body;
+    const { item_id, nama_pemesan, bidang, jumlah_diminta, keterangan_customer, order_id, customer_id } = req.body;
     const { data: itm, error: itmErr } = await db().from("items").select("*").eq("id", item_id).single();
     if (itmErr || !itm) return res.status(404).json({ error: "Barang tidak valid." });
     if ((itm.stok || 0) <= (itm.stok_minimum || 0)) return res.status(400).json({ error: `Barang "${itm.nama_barang}" stok minimum tercapai.` });
@@ -175,6 +224,7 @@ app.post("/api/requests", async (req, res) => {
       jumlah_diminta: parseInt(jumlah_diminta) || 1,
       jumlah_disetujui: null, keterangan_customer: keterangan_customer || "",
       catatan_admin: "", status: "Pending",
+      customer_id: customer_id || null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
     const { data, error } = await db().from("requests").insert(newRequest).select().single();
@@ -189,6 +239,7 @@ app.put("/api/requests/:id/process", async (req, res) => {
     const { jumlah_disetujui, catatan_admin } = req.body;
     const { data: reqObj, error: rErr } = await db().from("requests").select("*").eq("id", id).single();
     if (rErr || !reqObj) return res.status(404).json({ error: "Permintaan tidak ditemukan" });
+    if (reqObj.status !== "Pending") return res.status(400).json({ error: "Pesanan bukan dalam status Pending." });
     const { data: itm, error: iErr } = await db().from("items").select("*").eq("id", reqObj.item_id).single();
     if (iErr || !itm) return res.status(400).json({ error: "Barang tidak ditemukan." });
     const apprvAmount = parseInt(jumlah_disetujui);
@@ -196,16 +247,28 @@ app.put("/api/requests/:id/process", async (req, res) => {
     if (apprvAmount > itm.stok) return res.status(400).json({ error: `Melebihi stok (${itm.stok}).` });
     if (apprvAmount > reqObj.jumlah_diminta) return res.status(400).json({ error: `Melebihi jumlah diminta (${reqObj.jumlah_diminta}).` });
     await db().from("items").update({ stok: itm.stok - apprvAmount, updated_at: new Date().toISOString() }).eq("id", itm.id);
-    const { data, error } = await db().from("requests").update({
-      jumlah_disetujui: apprvAmount, catatan_admin: catatan_admin || "",
-      status: "Selesai", updated_at: new Date().toISOString(), approved_at: new Date().toISOString(),
-    }).eq("id", id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
     await db().from("stock_history").insert({
       id: genId("hst"), item_id: reqObj.item_id, tipe: "pengurangan", jumlah: apprvAmount,
       keterangan: `Disetujui untuk ${reqObj.nama_pemesan} (${reqObj.bidang}) - ID: ${id}`,
       created_at: new Date().toISOString(),
     });
+    const { data, error } = await db().from("requests").update({
+      jumlah_disetujui: apprvAmount, catatan_admin: catatan_admin || "",
+      status: "Diproses", updated_at: new Date().toISOString(),
+    }).eq("id", id).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, request: data });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/requests/:id/complete", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await db().from("requests").update({
+      status: "Selesai", updated_at: new Date().toISOString(), approved_at: new Date().toISOString(),
+    }).eq("id", id).in("status", ["Diproses"]).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(400).json({ error: "Pesanan tidak dalam status Diproses." });
     res.json({ success: true, request: data });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

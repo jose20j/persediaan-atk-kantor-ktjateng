@@ -90,6 +90,25 @@ INSERT INTO items (id, nama_barang, kategori, satuan, stok, stok_minimum, gambar
   ('itm-5','Stapler MAX HD-10 Tokyo Original','Peralatan Kantor','Pcs',3,4,'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=500&auto=format&fit=crop&q=60', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- 6. Tabel CUSTOMERS (Akun pegawai / customer)
+CREATE TABLE IF NOT EXISTS customers (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  nama_lengkap TEXT NOT NULL,
+  bidang TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- MIGRASI - Jalankan jika tabel requests sudah ada sebelumnya
+-- ============================================================
+-- Tambah kolom customer_id ke tabel requests (opsional, nullable)
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS customer_id TEXT REFERENCES customers(id) ON DELETE SET NULL;
+
+-- Update status constraint agar Diproses bisa digunakan secara mandiri
+-- (sudah ada di constraint awal, tidak perlu diubah)
+
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS) - Nonaktifkan untuk service_role
 -- Aktifkan jika pakai anon key di frontend langsung
@@ -99,3 +118,4 @@ ON CONFLICT (id) DO NOTHING;
 -- ALTER TABLE stock_history ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE customers ENABLE ROW LEVEL SECURITY;

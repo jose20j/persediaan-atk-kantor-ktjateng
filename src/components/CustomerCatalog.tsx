@@ -1,179 +1,18 @@
 import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/kejaksaan_logo_1779373081640.png";
-import { Item, Setting, Bidang } from "../types";
-import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus } from "lucide-react";
+import { Item, Setting, Bidang, Customer } from "../types";
+import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";
-import { jsPDF } from "jspdf";
-
-function generateOrderReceiptPDF(
-  cartItems: { item: Item; quantity: number }[],
-  formData: { nama_pemesan: string; bidang: string; keterangan_customer: string },
-  officeName: string,
-  orderId: string
-) {
-  const doc = new jsPDF("p", "pt", "a4");
-  const pw = 595;
-  const ml = 40;
-  const mr = 40;
-  const cw = pw - ml - mr;
-  const now = new Date();
-
-  const teal: [number, number, number] = [13, 78, 74];
-  const white: [number, number, number] = [255, 255, 255];
-  const dark: [number, number, number] = [15, 23, 42];
-  const mid: [number, number, number] = [71, 85, 105];
-  const light: [number, number, number] = [226, 232, 240];
-
-  let y = 0;
-
-  // HEADER
-  doc.setFillColor(...teal);
-  doc.rect(0, 0, pw, 70, "F");
-  doc.setTextColor(...white);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text((officeName || "Portal ATK Kantor").toUpperCase(), ml, 28);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text("Formulir Pesanan ATK Digital", ml, 46);
-  doc.setFontSize(8);
-  doc.text(
-    now.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" }),
-    pw - mr, 28, { align: "right" }
-  );
-
-  y = 94;
-
-  // TITLE
-  doc.setTextColor(...dark);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("BUKTI PERMINTAAN ATK", ml, y);
-  y += 24;
-
-  // Badge
-  doc.setFillColor(209, 250, 229);
-  doc.rect(ml, y, 172, 18, "F");
-  doc.setTextColor(4, 120, 87);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("Pesanan Diterima Admin", ml + 6, y + 13);
-  y += 28;
-
-  // Timestamp
-  doc.setTextColor(...mid);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.text(
-    `Diterima pada: ${now.toLocaleString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}`,
-    ml, y
-  );
-  y += 18;
-
-  // Divider
-  doc.setDrawColor(...light);
-  doc.line(ml, y, pw - mr, y);
-  y += 18;
-
-  // INFO TABLE
-  const infoRows: [string, string][] = [
-    ["Nama Pemesan", formData.nama_pemesan],
-    ["Bidang / Departemen", formData.bidang || "Umum"],
-    ["Tanggal Permintaan", now.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })],
-    ["Keterangan", formData.keterangan_customer || "-"],
-  ];
-
-  const lw = 145;
-  infoRows.forEach(([label, val]) => {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...mid);
-    doc.text(label, ml, y);
-    doc.text(":", ml + lw - 4, y);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...dark);
-    const lines = doc.splitTextToSize(val, cw - lw - 10);
-    doc.text(lines, ml + lw + 8, y);
-    y += Math.max(16, lines.length * 12);
-  });
-
-  y += 16;
-
-  // ITEMS TABLE HEADER
-  doc.setFillColor(...teal);
-  doc.rect(ml, y, cw, 24, "F");
-  doc.setTextColor(...white);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-
-  const col0x = ml + 6;
-  const col1x = ml + 34;
-  const col2x = ml + cw - 150;
-  const col3x = ml + cw - 58;
-
-  doc.text("No", col0x, y + 16);
-  doc.text("Nama Barang", col1x, y + 16);
-  doc.text("Satuan", col2x, y + 16);
-  doc.text("Jumlah", col3x, y + 16);
-  y += 24;
-
-  // ITEM ROWS
-  cartItems.forEach((ci, idx) => {
-    doc.setFillColor(...(idx % 2 === 0 ? ([248, 250, 252] as [number, number, number]) : ([255, 255, 255] as [number, number, number])));
-    doc.rect(ml, y, cw, 22, "F");
-    doc.setTextColor(...dark);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(String(idx + 1), col0x, y + 15);
-    const name = ci.item.nama_barang.length > 38 ? ci.item.nama_barang.slice(0, 35) + "..." : ci.item.nama_barang;
-    doc.text(name, col1x, y + 15);
-    doc.text(ci.item.satuan, col2x, y + 15);
-    doc.text(String(ci.quantity), col3x, y + 15);
-    y += 22;
-  });
-
-  doc.setDrawColor(...light);
-  doc.rect(ml, y - cartItems.length * 22 - 24, cw, cartItems.length * 22 + 24, "S");
-
-  y += 28;
-
-  // SIGNATURE BOX (right-aligned)
-  const sigX = pw - mr - 200;
-  doc.setTextColor(...dark);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(
-    `Semarang, ${now.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`,
-    sigX, y
-  );
-  y += 14;
-  doc.text("Pemesan,", sigX, y);
-  y += 55;
-  doc.setFont("helvetica", "bold");
-  doc.text(formData.nama_pemesan, sigX, y);
-  y += 14;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...mid);
-  doc.text(formData.bidang || "Umum", sigX, y);
-
-  // FOOTER
-  doc.setDrawColor(...light);
-  doc.line(ml, 800, pw - mr, 800);
-  doc.setTextColor(...mid);
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(7.5);
-  doc.text("Dokumen ini diterbitkan secara otomatis oleh Sistem Persediaan ATK Kantor.", ml, 814);
-  doc.text(`Dicetak pada: ${now.toLocaleString("id-ID")}  |  ID Pesanan: ${orderId}`, ml, 826);
-
-  doc.save(`bukti_pesanan_ATK_${now.toISOString().split("T")[0]}.pdf`);
-}
+import { generateOrderPDF } from "../lib/generatePDF";
 
 interface CustomerCatalogProps {
+  customer: Customer;
   onSwappedToAdmin: () => void;
+  onViewOrders: () => void;
+  onLogout: () => void;
 }
 
-export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogProps) {
+export default function CustomerCatalog({ customer, onSwappedToAdmin, onViewOrders, onLogout }: CustomerCatalogProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [settings, setSettings] = useState<Setting>({ nomor_whatsapp_admin: "", nama_kantor: "" });
   const [bidangs, setBidangs] = useState<Bidang[]>([]);
@@ -188,8 +27,8 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
   const [cart, setCart] = useState<{ item: Item; quantity: number }[]>([]);
   const [showCartModal, setShowCartModal] = useState(false);
   const [orderForm, setOrderForm] = useState({
-    nama_pemesan: "",
-    bidang: "",
+    nama_pemesan: customer.nama_lengkap,
+    bidang: customer.bidang,
     keterangan_customer: ""
   });
   const [submittingOrder, setSubmittingOrder] = useState(false);
@@ -211,10 +50,6 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
       // Process Categories
       const uniqueCategories = Array.from(new Set(fetchedItems.map(item => item.kategori)));
       setCategories(["Semua", ...uniqueCategories]);
-
-      if (fetchedBidangs.length > 0) {
-        setOrderForm(prev => ({ ...prev, bidang: fetchedBidangs[0].nama_bidang }));
-      }
     } catch (err) {
       console.error("Gagal memuat katalog", err);
     } finally {
@@ -283,18 +118,26 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
         nama_pemesan: orderForm.nama_pemesan,
         bidang: orderForm.bidang || "Umum",
         jumlah_diminta: itemCart.quantity,
-        keterangan_customer: orderForm.keterangan_customer
+        keterangan_customer: orderForm.keterangan_customer,
+        customer_id: customer.id,
       }));
 
       await Promise.all(requestPayloads.map(payload => createRequest(payload)));
 
       try {
-        generateOrderReceiptPDF(
-          cart,
-          { ...orderForm },
-          settings.nama_kantor || "Portal ATK Kantor",
-          orderId
-        );
+        generateOrderPDF({
+          items: cart.map(c => ({
+            nama_barang: c.item.nama_barang,
+            satuan: c.item.satuan,
+            jumlah_diminta: c.quantity,
+          })),
+          nama_pemesan: orderForm.nama_pemesan,
+          bidang: orderForm.bidang || "Umum",
+          keterangan_customer: orderForm.keterangan_customer,
+          officeName: settings.nama_kantor || "Portal ATK Kantor",
+          orderId,
+          status: "Pending",
+        });
       } catch (pdfErr) {
         console.error("Gagal menghasilkan PDF:", pdfErr);
       }
@@ -345,12 +188,28 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+            {/* Customer info chip */}
+            <div className="hidden md:flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
+              <div className="h-6 w-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">
+                {customer.nama_lengkap.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white leading-none">{customer.nama_lengkap}</p>
+                <p className="text-[10px] text-teal-300">{customer.bidang}</p>
+              </div>
+            </div>
+            <button
+              onClick={onViewOrders}
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <ClipboardList className="h-4 w-4" /> Pesanan Saya
+            </button>
             <button
               onClick={() => setShowCartModal(true)}
-              className="relative px-5 py-2.5 bg-teal-600 hover:bg-teal-500 border border-teal-500 text-white rounded-xl font-bold text-sm transition-all shadow-md focus:ring-2 focus:ring-teal-400 cursor-pointer w-full sm:w-auto text-center flex items-center justify-center gap-2"
+              className="relative px-5 py-2.5 bg-teal-600 hover:bg-teal-500 border border-teal-500 text-white rounded-xl font-bold text-sm transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
             >
               <ShoppingBag className="h-4 w-4" />
-              Keranjang Pesanan
+              Keranjang
               {cart.length > 0 && (
                 <span className="bg-rose-500 text-white rounded-full text-[10px] sm:text-xs px-2 py-0.5 min-w-[20px] font-bold">
                   {cart.reduce((total, c) => total + c.quantity, 0)}
@@ -359,9 +218,9 @@ export default function CustomerCatalog({ onSwappedToAdmin }: CustomerCatalogPro
             </button>
             <button
               onClick={onSwappedToAdmin}
-              className="px-5 py-2.5 bg-teal-750/30 hover:bg-teal-750/60 border border-teal-500/30 text-teal-100 rounded-xl font-medium text-sm transition-all focus:ring-2 focus:ring-teal-400 cursor-pointer w-full sm:w-auto text-center"
+              className="px-4 py-2.5 bg-teal-750/30 hover:bg-teal-750/60 border border-teal-500/30 text-teal-100 rounded-xl font-medium text-sm transition-all cursor-pointer text-center hidden sm:block"
             >
-              Masuk Portal Admin ⚖️
+              Portal Admin ⚖️
             </button>
           </div>
         </div>

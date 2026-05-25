@@ -10,14 +10,23 @@ export interface Item {
   updated_at: string;
 }
 
+export interface Customer {
+  id: string;
+  username: string;
+  nama_lengkap: string;
+  bidang: string;
+  created_at: string;
+}
+
 export interface RequestOrder {
   id: string;
   order_id?: string;
   item_id: string;
+  customer_id?: string;
   nama_pemesan: string;
   bidang: string;
   jumlah_diminta: number;
-  jumlah_disetujui: number | null; // null if pending, or number set by admin
+  jumlah_disetujui: number | null;
   keterangan_customer?: string;
   catatan_admin?: string;
   status: 'Pending' | 'Diproses' | 'Selesai' | 'Ditolak';
@@ -41,7 +50,7 @@ export interface StockHistory {
   jumlah: number;
   keterangan: string;
   created_at: string;
-  itemName?: string; // helper
+  itemName?: string;
 }
 
 export interface Bidang {
@@ -49,7 +58,6 @@ export interface Bidang {
   nama_bidang: string;
 }
 
-// Stats response model
 export interface Stats {
   totalItems: number;
   totalStockAll: number;

@@ -1,41 +1,33 @@
 import React, { useState, useEffect, useRef } from "react";
 import kejaksaanLogo from "./assets/images/kejaksaan_logo_1779373081640.png";
+import CustomerLogin from "./components/CustomerLogin";
 import CustomerCatalog from "./components/CustomerCatalog";
+import CustomerPortal from "./components/CustomerPortal";
 import AdminDashboard from "./components/AdminDashboard";
 import AdminItems from "./components/AdminItems";
 import AdminRequests from "./components/AdminRequests";
 import AdminSettings from "./components/AdminSettings";
 import ReportExport from "./components/ReportExport";
+import { Customer } from "./types";
 import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus } from "./api";
 import {
-  LayoutDashboard,
-  Package,
-  FileText,
-  Sliders,
-  Settings,
-  LogOut,
-  ArrowLeft,
-  Bell,
-  X as XIcon
+  LayoutDashboard, Package, FileText, Sliders,
+  Settings, LogOut, ArrowLeft, Bell, X as XIcon
 } from "lucide-react";
 
-export default function App() {
-  // POV check state
-  // "customer" | "admin_login" | "admin_portal"
-  const [pov, setPov] = useState<"customer" | "admin_login" | "admin_portal">("customer");
-  
-  // Current admin active tab
-  // 1: Dashboard, 2: Items, 3: Requests, 4: Reports, 5: Settings
-  const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4 | 5>(1);
+type Pov = "customer_login" | "customer_catalog" | "customer_portal" | "admin_login" | "admin_portal";
 
-  // Admin login credentials state
+export default function App() {
+  const [pov, setPov] = useState<Pov>("customer_login");
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [officeName, setOfficeName] = useState("Portal ATK Kantor");
+
+  const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [officeName, setOfficeName] = useState("Portal ATK Kantor");
 
-  // Notification state for new pending orders
   const [pendingCount, setPendingCount] = useState(0);
   const [showNewOrderNotif, setShowNewOrderNotif] = useState(false);
   const prevPendingCount = useRef(0);
@@ -43,22 +35,27 @@ export default function App() {
 
   useEffect(() => {
     initializeLocal();
-    if (isAdminLoggedIn()) {
-      setPov("customer");
-    }
-    const fetchOffice = async () => {
+
+    // Restore customer session
+    const saved = localStorage.getItem("atk_customer");
+    if (saved) {
       try {
-        const set = await getSettings();
-        setOfficeName(set.nama_kantor);
-      } catch (err) {}
-    };
-    fetchOffice();
+        const c: Customer = JSON.parse(saved);
+        setCustomer(c);
+        setPov("customer_catalog");
+      } catch {}
+    }
+
+    if (isAdminLoggedIn()) {
+      // Admin session is separate, don't auto-switch
+    }
+
+    getSettings().then(s => setOfficeName(s.nama_kantor)).catch(() => {});
   }, []);
 
   // Poll for new pending orders when admin is logged in
   useEffect(() => {
     if (pov !== "admin_portal") return;
-
     const poll = async () => {
       try {
         const reqs = await getRequests();
@@ -76,11 +73,21 @@ export default function App() {
         setBackendStatus(getBackendStatus());
       }
     };
-
     poll();
     const interval = setInterval(poll, 30000);
     return () => clearInterval(interval);
   }, [pov]);
+
+  const handleCustomerLogin = (c: Customer) => {
+    setCustomer(c);
+    setPov("customer_catalog");
+  };
+
+  const handleCustomerLogout = () => {
+    localStorage.removeItem("atk_customer");
+    setCustomer(null);
+    setPov("customer_login");
+  };
 
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,21 +95,19 @@ export default function App() {
       setLoginError("Mohon isi seluruh bidang!");
       return;
     }
-
     try {
       setLoading(true);
       setLoginError("");
       const resp = await loginAdmin(adminUsername, adminPassword);
       if (resp.success) {
         setPov("admin_portal");
-        setActiveTab(1); // Default to Dashboard
-        // Clear inputs
+        setActiveTab(1);
         setAdminUsername("");
         setAdminPassword("");
       } else {
         setLoginError(resp.message || "Nama pengguna atau sandi keliru.");
       }
-    } catch (err) {
+    } catch {
       setLoginError("Gagal berkoordinasi dengan server.");
     } finally {
       setLoading(false);
@@ -111,25 +116,27 @@ export default function App() {
 
   const handleLogoutAdmin = () => {
     logoutAdmin();
-    setPov("customer");
+    // Return to customer catalog if customer is logged in, else login
+    if (customer) setPov("customer_catalog");
+    else setPov("customer_login");
   };
 
-  const handleNavigateToRequests = () => {
-    setActiveTab(3); // Requests tab
-  };
+  // ── CUSTOMER LOGIN ────────────────────────────────────────────
+  if (pov === "customer_login") {
+    return (
+      <CustomerLogin
+        officeName={officeName}
+        onLogin={handleCustomerLogin}
+        onSwappedToAdmin={() => setPov("admin_login")}
+      />
+    );
+  }
 
-  const handleNavigateToItems = () => {
-    setActiveTab(2); // Items tab
-  };
-
-  const handleNavigateToReports = () => {
-    setActiveTab(4); // Reports tab
-  };
-
-  // Render Customer catalogue
-  if (pov === "customer") {
+  // ── CUSTOMER CATALOG ──────────────────────────────────────────
+  if (pov === "customer_catalog" && customer) {
     return (
       <CustomerCatalog
+        customer={customer}
         onSwappedToAdmin={() => {
           if (isAdminLoggedIn()) {
             setPov("admin_portal");
@@ -138,33 +145,42 @@ export default function App() {
             setPov("admin_login");
           }
         }}
+        onViewOrders={() => setPov("customer_portal")}
+        onLogout={handleCustomerLogout}
       />
     );
   }
 
-  // Render Admin Simple Login Form
+  // ── CUSTOMER PORTAL (order history) ──────────────────────────
+  if (pov === "customer_portal" && customer) {
+    return (
+      <CustomerPortal
+        customer={customer}
+        officeName={officeName}
+        onLogout={handleCustomerLogout}
+        onBrowseCatalog={() => setPov("customer_catalog")}
+      />
+    );
+  }
+
+  // ── ADMIN LOGIN ───────────────────────────────────────────────
   if (pov === "admin_login") {
     return (
       <div id="login_screen" className="min-h-screen bg-slate-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
         <div className="absolute top-5 left-5">
           <button
-            onClick={() => setPov("customer")}
+            onClick={() => customer ? setPov("customer_catalog") : setPov("customer_login")}
             className="px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 hover:bg-slate-50 cursor-pointer transition-all shadow-xs"
           >
-            <ArrowLeft className="h-4 w-4" /> Kembali ke Katalog
+            <ArrowLeft className="h-4 w-4" /> Kembali
           </button>
         </div>
 
         <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-2">
           <div className="mx-auto h-14 w-14 flex items-center justify-center">
-            <img
-              src={kejaksaanLogo}
-              referrerPolicy="no-referrer"
-              className="h-12 w-12 object-contain"
-              alt="Logo Kejaksaan"
-            />
+            <img src={kejaksaanLogo} className="h-12 w-12 object-contain" alt="Logo Kejaksaan" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight font-display">Portal Admin ATK</h2>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">Portal Admin ATK</h2>
           <p className="text-xs sm:text-sm text-slate-500 max-w-xs mx-auto">
             Masukkan akun kredensial Anda untuk verifikasi sistem manajemen
           </p>
@@ -177,102 +193,82 @@ export default function App() {
                 <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" /> {loginError}
               </div>
             )}
-
             <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5Unified">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
                   Nama Pengguna (Username)
                 </label>
                 <input
-                  type="text"
-                  value={adminUsername}
-                  onChange={(e) => setAdminUsername(e.target.value)}
+                  type="text" value={adminUsername}
+                  onChange={e => setAdminUsername(e.target.value)}
                   placeholder="Contoh: admin"
                   className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-hidden focus:border-teal-500 focus:bg-white"
                   required
                 />
               </div>
-
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5Unified">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
                   Kata Sandi (Password)
                 </label>
                 <input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
+                  type="password" value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
                   placeholder="Masukkan sandi..."
                   className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-hidden focus:border-teal-500 focus:bg-white"
                   required
                 />
               </div>
-
               <div className="pt-2">
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white rounded-xl text-sm font-bold transition-all shadow-sm shadow-teal-100 cursor-pointer"
+                  type="submit" disabled={loading}
+                  className="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white rounded-xl text-sm font-bold transition-all shadow-sm cursor-pointer"
                 >
-                  {loading ? "Memverifikasi..." : "Verifikasi Masuk Secara Aman &rarr;"}
+                  {loading ? "Memverifikasi..." : "Verifikasi Masuk →"}
                 </button>
               </div>
             </form>
-
-            
           </div>
         </div>
       </div>
     );
   }
 
-  // Render Full-Stack Admin Workspace Portal (pov === "admin_portal")
+  // ── ADMIN PORTAL ──────────────────────────────────────────────
   return (
     <div id="admin_portal_layout" className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
-      
-      {/* SIDEBAR FOR VIEWPORT LARGE */}
       <nav className="w-full md:w-64 bg-slate-900 text-slate-400 shrink-0 flex flex-col justify-between border-r border-slate-800">
         <div>
-          {/* Logo Brand Header */}
           <div className="p-6 border-b border-slate-800 flex items-center gap-3">
             <div className="h-8 w-8 flex items-center justify-center shrink-0">
-              <img
-                src={kejaksaanLogo}
-                referrerPolicy="no-referrer"
-                className="h-8 w-8 object-contain"
-                alt="Logo Kejaksaan"
-              />
+              <img src={kejaksaanLogo} className="h-8 w-8 object-contain" alt="Logo Kejaksaan" />
             </div>
             <div>
-              <h2 className="text-sm font-extrabold text-white leading-tight font-display">Admin ATK</h2>
+              <h2 className="text-sm font-extrabold text-white leading-tight">Admin ATK</h2>
               <p className="text-[10px] text-teal-400 font-mono">Workspace Terbuka</p>
             </div>
           </div>
-
-          {/* Navigation Items list */}
           <div className="p-4 space-y-1.5">
             {[
-              { id: 1, label: "Statistik Ringkasan", icon: LayoutDashboard, badge: 0 },
-              { id: 2, label: "Manajemen Barang", icon: Package, badge: 0 },
-              { id: 3, label: "Permintaan Masuk", icon: FileText, badge: pendingCount },
-              { id: 4, label: "Export Laporan", icon: Sliders, badge: 0 },
-              { id: 5, label: "Pengaturan & Kontrol", icon: Settings, badge: 0 }
-            ].map((tab) => {
+              { id: 1, label: "Statistik Ringkasan",  icon: LayoutDashboard, badge: 0 },
+              { id: 2, label: "Manajemen Barang",     icon: Package,         badge: 0 },
+              { id: 3, label: "Permintaan Masuk",     icon: FileText,        badge: pendingCount },
+              { id: 4, label: "Export Laporan",       icon: Sliders,         badge: 0 },
+              { id: 5, label: "Pengaturan & Kontrol", icon: Settings,        badge: 0 },
+            ].map(tab => {
               const IconComp = tab.icon;
               const isSelected = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full text-left px-4 py-3 rounded-xl transition-all text-xs font-bold font-sans flex items-center gap-3 cursor-pointer ${
-                    isSelected
-                      ? "bg-teal-600 text-white shadow-sm"
-                      : "hover:bg-slate-800 hover:text-slate-200"
+                  className={`w-full text-left px-4 py-3 rounded-xl transition-all text-xs font-bold flex items-center gap-3 cursor-pointer ${
+                    isSelected ? "bg-teal-600 text-white shadow-sm" : "hover:bg-slate-800 hover:text-slate-200"
                   }`}
                 >
                   <IconComp className={`h-4.5 w-4.5 shrink-0 ${isSelected ? "text-white" : "text-slate-400"}`} />
                   <span className="flex-1">{tab.label}</span>
                   {tab.badge > 0 && (
-                    <span className="bg-rose-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
+                    <span className="bg-rose-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                       {tab.badge}
                     </span>
                   )}
@@ -282,9 +278,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* User Session bottom actions */}
         <div className="p-4 border-t border-slate-800 space-y-2 bg-slate-950/40">
-          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/40 rounded-xl border border-slate-850">
+          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800/40 rounded-xl">
             <div className="bg-emerald-500 h-2.5 w-2.5 rounded-full ring-4 ring-emerald-500/20 animate-pulse" />
             <div className="truncate">
               <p className="text-xs font-bold text-white leading-none">Petugas Admin</p>
@@ -295,14 +290,12 @@ export default function App() {
             onClick={handleLogoutAdmin}
             className="w-full px-4 py-2.5 bg-slate-800 hover:bg-rose-950 hover:text-rose-200 border border-slate-700/55 text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            <LogOut className="h-4 w-4 text-slate-400 group-hover:text-rose-400" /> Keluar Sesi Admin
+            <LogOut className="h-4 w-4 text-slate-400" /> Keluar Sesi Admin
           </button>
         </div>
       </nav>
 
-      {/* MAIN VIEWPORT PANELS */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        {/* Top Navbar */}
         <header className="bg-white border-b border-slate-200 py-4 px-6 sm:px-8 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-3">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -312,12 +305,11 @@ export default function App() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-lg">
-              UTC: {new Date().toISOString().split("T")[0]}
+              {new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
             </span>
           </div>
         </header>
 
-        {/* Backend connection warning */}
         {backendStatus !== "ok" && backendStatus !== "offline" && (
           <div className="bg-rose-50 border-b border-rose-200 px-6 py-3 flex items-center gap-3">
             <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
@@ -329,9 +321,8 @@ export default function App() {
           </div>
         )}
 
-        {/* New order notification toast */}
         {showNewOrderNotif && (
-          <div className="fixed top-4 right-4 z-[100] bg-white border border-amber-200 shadow-2xl rounded-2xl p-4 flex items-center gap-3 max-w-sm animate-in slide-in-from-right duration-300">
+          <div className="fixed top-4 right-4 z-[100] bg-white border border-amber-200 shadow-2xl rounded-2xl p-4 flex items-center gap-3 max-w-sm">
             <div className="bg-amber-100 p-2.5 rounded-xl shrink-0">
               <Bell className="h-5 w-5 text-amber-600" />
             </div>
@@ -339,25 +330,19 @@ export default function App() {
               <p className="font-bold text-slate-800 text-sm">Pesanan Baru Masuk!</p>
               <p className="text-xs text-slate-500 mt-0.5">{pendingCount} pesanan menunggu konfirmasi admin.</p>
             </div>
-            <button
-              onClick={() => { setShowNewOrderNotif(false); setActiveTab(3); }}
-              className="text-xs font-bold text-teal-600 hover:text-teal-800 shrink-0 cursor-pointer"
-            >
-              Lihat
-            </button>
+            <button onClick={() => { setShowNewOrderNotif(false); setActiveTab(3); }} className="text-xs font-bold text-teal-600 hover:text-teal-800 shrink-0 cursor-pointer">Lihat</button>
             <button onClick={() => setShowNewOrderNotif(false)} className="text-slate-400 hover:text-slate-600 shrink-0 cursor-pointer">
               <XIcon className="h-4 w-4" />
             </button>
           </div>
         )}
 
-        {/* Workspace Central Views */}
         <main className="p-6 sm:p-8 flex-1">
           {activeTab === 1 && (
             <AdminDashboard
-              onNavigateToRequests={handleNavigateToRequests}
-              onNavigateToItems={handleNavigateToItems}
-              onNavigateToReports={handleNavigateToReports}
+              onNavigateToRequests={() => setActiveTab(3)}
+              onNavigateToItems={() => setActiveTab(2)}
+              onNavigateToReports={() => setActiveTab(4)}
             />
           )}
           {activeTab === 2 && <AdminItems />}

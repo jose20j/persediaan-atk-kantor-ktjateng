@@ -1,4 +1,4 @@
-import { Item, RequestOrder, Setting, StockHistory, Bidang, Stats } from "./types";
+import { Item, RequestOrder, Setting, StockHistory, Bidang, Stats, Customer } from "./types";
 
 type BackendStatus = "ok" | "supabase_missing" | "function_failed" | "offline";
 let _backendStatus: BackendStatus = "offline";
@@ -460,6 +460,40 @@ export async function createRequest(order: Omit<RequestOrder, "id" | "jumlah_dis
   throw new Error(errData.error || "Gagal mengirim pesanan ke server.");
 }
 
+export async function registerCustomer(data: { username: string; password: string; nama_lengkap: string; bidang: string }): Promise<Customer> {
+  await checkBackend();
+  if (useLocalFallback) throw new Error("Server tidak tersedia. Pendaftaran membutuhkan koneksi server.");
+  const res = await fetch("/api/auth/customer/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Pendaftaran gagal.");
+  return json as Customer;
+}
+
+export async function loginCustomer(username: string, password: string): Promise<Customer> {
+  await checkBackend();
+  if (useLocalFallback) throw new Error("Server tidak tersedia. Login membutuhkan koneksi server.");
+  const res = await fetch("/api/auth/customer/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Login gagal.");
+  return json as Customer;
+}
+
+export async function getCustomerOrders(customer_id: string): Promise<RequestOrder[]> {
+  await checkBackend();
+  if (useLocalFallback) throw new Error("Server tidak tersedia.");
+  const res = await fetch(`/api/customer/orders?customer_id=${encodeURIComponent(customer_id)}`);
+  if (res.ok) return await res.json();
+  throw new Error("Gagal memuat pesanan.");
+}
+
 export async function processRequest(id: string, jumlah_disetujui: number, catatan_admin: string): Promise<boolean> {
   await checkBackend();
   if (useLocalFallback) {
@@ -473,6 +507,15 @@ export async function processRequest(id: string, jumlah_disetujui: number, catat
   if (res.ok) return true;
   const errData = await res.json().catch(() => ({}));
   throw new Error(errData.error || "Gagal memproses pesanan.");
+}
+
+export async function completeRequest(id: string): Promise<boolean> {
+  await checkBackend();
+  if (useLocalFallback) throw new Error("Server tidak tersedia.");
+  const res = await fetch(`/api/requests/${id}/complete`, { method: "PUT" });
+  if (res.ok) return true;
+  const errData = await res.json().catch(() => ({}));
+  throw new Error(errData.error || "Gagal menyelesaikan pesanan.");
 }
 
 export async function rejectRequest(id: string, catatan_admin: string): Promise<boolean> {

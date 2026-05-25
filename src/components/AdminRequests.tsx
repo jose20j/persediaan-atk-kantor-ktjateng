@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { RequestOrder, Item } from "../types";
-import { getRequests, getItems, processRequest, rejectRequest, getDepartments } from "../api";
+import { getRequests, getItems, processRequest, rejectRequest, completeRequest, getDepartments } from "../api";
 import {
   FileCheck, Search, AlertTriangle, FileText, User, MapPin, Info,
   Layers, ChevronRight, Package, Calendar, MessageSquare,
-  X, CheckCircle, XCircle, Clock, ShoppingBag
+  X, CheckCircle, XCircle, Clock, ShoppingBag, Truck
 } from "lucide-react";
 
-type GroupStatus = "Pending" | "Selesai" | "Ditolak" | "Sebagian";
+type GroupStatus = "Pending" | "Diproses" | "Selesai" | "Ditolak" | "Sebagian";
 
 interface OrderGroup {
   order_id: string;
@@ -17,6 +17,7 @@ interface OrderGroup {
   created_at: string;
   status: GroupStatus;
   hasPending: boolean;
+  hasBeingProcessed: boolean;
   keterangan_customer?: string;
 }
 
@@ -28,9 +29,10 @@ interface ItemForm {
 }
 
 function computeGroupStatus(reqs: RequestOrder[]): GroupStatus {
-  if (reqs.every(r => r.status === "Pending")) return "Pending";
-  if (reqs.every(r => r.status === "Selesai")) return "Selesai";
-  if (reqs.every(r => r.status === "Ditolak")) return "Ditolak";
+  if (reqs.every(r => r.status === "Selesai"))  return "Selesai";
+  if (reqs.every(r => r.status === "Ditolak"))  return "Ditolak";
+  if (reqs.every(r => r.status === "Diproses")) return "Diproses";
+  if (reqs.every(r => r.status === "Pending"))  return "Pending";
   return "Sebagian";
 }
 
@@ -92,6 +94,7 @@ export default function AdminRequests() {
         created_at: reqs[0].created_at,
         status: computeGroupStatus(reqs),
         hasPending: reqs.some(r => r.status === "Pending"),
+        hasBeingProcessed: reqs.some(r => r.status === "Diproses"),
         keterangan_customer: reqs[0].keterangan_customer,
       }))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -112,9 +115,10 @@ export default function AdminRequests() {
       const matchesDept = deptFilter === "Semua" || group.bidang === deptFilter;
 
       let matchesStatus = true;
-      if (statusFilter === "Pending") matchesStatus = group.hasPending;
-      else if (statusFilter === "Selesai") matchesStatus = group.status === "Selesai";
-      else if (statusFilter === "Ditolak") matchesStatus = group.status === "Ditolak";
+      if (statusFilter === "Pending")   matchesStatus = group.hasPending;
+      else if (statusFilter === "Diproses") matchesStatus = group.hasBeingProcessed || group.status === "Diproses";
+      else if (statusFilter === "Selesai")  matchesStatus = group.status === "Selesai";
+      else if (statusFilter === "Ditolak")  matchesStatus = group.status === "Ditolak";
 
       const groupDateStr = toLocalDateStr(group.created_at);
       const matchesDate = groupDateStr >= startDate && groupDateStr <= endDate;
@@ -198,10 +202,30 @@ export default function AdminRequests() {
     }
   };
 
+  const handleCompleteGroup = async (group: OrderGroup) => {
+    const diprosesReqs = group.requests.filter(r => r.status === "Diproses");
+    if (diprosesReqs.length === 0) return;
+    if (!confirm(`Tandai ${diprosesReqs.length} item sebagai Selesai untuk pesanan ${group.pemesan}?`)) return;
+    try {
+      setSubmitting(true);
+      await Promise.all(diprosesReqs.map(r => completeRequest(r.id)));
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "Gagal menyelesaikan pesanan.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const StatusBadge = ({ status }: { status: GroupStatus }) => {
     if (status === "Pending") return (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-200 text-xs font-bold">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" /> Pending
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" /> Menunggu
+      </span>
+    );
+    if (status === "Diproses") return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200 text-xs font-bold">
+        <Truck className="h-3 w-3" /> Diproses
       </span>
     );
     if (status === "Selesai") return (
@@ -247,7 +271,8 @@ export default function AdminRequests() {
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm py-2.5 px-4 rounded-xl focus:border-teal-500">
               <option value="Semua">Semua Status</option>
-              <option value="Pending">🟡 Pending / Sebagian</option>
+              <option value="Pending">🟡 Menunggu</option>
+              <option value="Diproses">🔵 Diproses</option>
               <option value="Selesai">🟢 Selesai</option>
               <option value="Ditolak">🔴 Ditolak</option>
             </select>
@@ -345,16 +370,28 @@ export default function AdminRequests() {
                     </td>
 
                     <td className="py-4 px-5 text-right">
-                      {group.hasPending ? (
-                        <button
-                          onClick={() => handleOpenProcess(group)}
-                          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                        >
-                          Proses <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">—</span>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {group.hasPending && (
+                          <button
+                            onClick={() => handleOpenProcess(group)}
+                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            Proses <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {group.hasBeingProcessed && !group.hasPending && (
+                          <button
+                            onClick={() => handleCompleteGroup(group)}
+                            disabled={submitting}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Truck className="h-3.5 w-3.5" /> Selesaikan
+                          </button>
+                        )}
+                        {!group.hasPending && !group.hasBeingProcessed && (
+                          <span className="text-xs text-slate-400 italic">—</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -425,23 +462,33 @@ export default function AdminRequests() {
                       const form = groupForms[req.id];
 
                       if (!isPending) {
-                        const isSelesai = req.status === "Selesai";
+                        const isSelesai  = req.status === "Selesai";
+                        const isDiproses = req.status === "Diproses";
+                        const borderCls  = isSelesai ? "border-teal-200 bg-teal-50/40"
+                          : isDiproses ? "border-blue-200 bg-blue-50/40"
+                          : "border-rose-200 bg-rose-50/40";
+                        const iconCls = isSelesai ? "text-teal-600" : isDiproses ? "text-blue-500" : "text-rose-500";
+                        const badgeCls = isSelesai ? "bg-teal-100 text-teal-700"
+                          : isDiproses ? "bg-blue-100 text-blue-700"
+                          : "bg-rose-100 text-rose-700";
+                        const badgeLabel = isSelesai ? "✓ Selesai" : isDiproses ? "⟳ Diproses" : "✗ Ditolak";
                         return (
-                          <div key={req.id} className={`rounded-xl border p-4 ${
-                            isSelesai ? "border-teal-200 bg-teal-50/40" : "border-rose-200 bg-rose-50/40"
-                          }`}>
+                          <div key={req.id} className={`rounded-xl border p-4 ${borderCls}`}>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2.5">
-                                <Package className={`h-4 w-4 shrink-0 ${isSelesai ? "text-teal-600" : "text-rose-500"}`} />
+                                <Package className={`h-4 w-4 shrink-0 ${iconCls}`} />
                                 <div>
                                   <p className="font-bold text-slate-800 text-sm">{req.itemName || "—"}</p>
                                   {itm && <p className="text-[11px] text-slate-500">{itm.kategori} · {itm.satuan}</p>}
+                                  {isDiproses && req.jumlah_disetujui != null && (
+                                    <p className="text-[11px] text-blue-600 font-semibold mt-0.5">
+                                      Disetujui: {req.jumlah_disetujui} {itm?.satuan || "unit"}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
-                              <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                                isSelesai ? "bg-teal-100 text-teal-700" : "bg-rose-100 text-rose-700"
-                              }`}>
-                                {isSelesai ? "✓ Selesai" : "✗ Ditolak"}
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${badgeCls}`}>
+                                {badgeLabel}
                               </span>
                             </div>
                           </div>
@@ -566,7 +613,7 @@ export default function AdminRequests() {
               >
                 {submitting
                   ? "Menyimpan..."
-                  : `Proses ${selectedGroup.requests.filter(r => r.status === "Pending").length} Item 🟢`}
+                  : `Setujui & Proses ${selectedGroup.requests.filter(r => r.status === "Pending").length} Item →`}
               </button>
             </div>
           </div>
