@@ -67,34 +67,32 @@ export async function generateOrderPDF(order: PDFOrderData) {
   let y = 0;
 
   // ── HEADER ──────────────────────────────────────────────────
-  const headerH = 76;
+  const headerH = 86;
   doc.setFillColor(...teal);
   doc.rect(0, 0, pw, headerH, "F");
 
-  // Logo on LEFT side of header
-  const logoSize = 52;
+  // Logo on LEFT side of header (no white background — new logo has transparency)
+  const logoSize = 60;
   const logoY = (headerH - logoSize) / 2;
   let textStartX = ml;
   if (logoDataUrl) {
     const logoX = ml;
-    doc.setFillColor(255, 255, 255);
-    doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 2, "F");
     doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoSize, logoSize);
-    textStartX = ml + logoSize + 10;
+    textStartX = ml + logoSize + 12;
   }
 
-  // Office name and subtitle (no "No. Pesanan" on right)
+  // Office name and subtitle
   doc.setTextColor(...white);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(16);
   const officeLine = doc.splitTextToSize(
     (order.officeName || "Portal ATK Kantor").toUpperCase(),
     pw - mr - textStartX
   );
-  doc.text(officeLine, textStartX, 26);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.text("Formulir Pesanan ATK Digital", textStartX, officeLine.length > 1 ? 52 : 44);
+  doc.text(officeLine, textStartX, 30);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text("Formulir Pesanan ATK Digital", textStartX, officeLine.length > 1 ? 60 : 50);
 
   y = headerH + 20;
 
