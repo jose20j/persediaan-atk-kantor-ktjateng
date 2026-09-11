@@ -10,8 +10,6 @@ import {
   Trash2,
   Trash,
   HelpCircle,
-  Database,
-  RefreshCw,
   Sliders,
   Sparkles,
   ShieldAlert,
@@ -32,6 +30,13 @@ export default function AdminSettings() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingDept, setSavingDept] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+
+  // The wipe control is kept out of the normal settings page: one stray click
+  // destroys every item, order and stock record with no backup to restore from.
+  // Reach it deliberately with ?dev=1 when seeding a fresh environment.
+  const showMaintenance =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("dev") === "1";
 
   const loadSettingsData = async () => {
     try {
@@ -121,8 +126,17 @@ export default function AdminSettings() {
   };
 
   const handleResetDB = async () => {
+    // The endpoint only deletes — it does not re-seed anything. The wording
+    // here has to say that plainly: the old copy promised a restore to
+    // factory defaults that never happens, which is how an admin could wipe
+    // real data expecting sample data back.
     const isConfirmed = window.confirm(
-      "⚠️ PERINGATAN KRITIS: Apakah Anda yakin ingin mengosongkan seluruh data transaksi dan memulihkan pengaturan default sistem? Semua data saat ini akan terhapus total!"
+      "⚠️ PERINGATAN: Tindakan ini MENGHAPUS PERMANEN seluruh data barang, " +
+      "riwayat pesanan, riwayat stok, dan daftar bidang.\n\n" +
+      "Data TIDAK diisi ulang — katalog akan benar-benar kosong setelahnya.\n" +
+      "Tidak ada cadangan dan tindakan ini tidak bisa dibatalkan.\n\n" +
+      "Akun admin dan akun pegawai tidak ikut terhapus.\n\n" +
+      "Lanjutkan?"
     );
     if (!isConfirmed) return;
 
@@ -130,12 +144,12 @@ export default function AdminSettings() {
       setLoading(true);
       const ok = await resetDatabase();
       if (ok) {
-        alert("Database berhasil dipulihkan ke pengaturan awal standard.");
+        alert("Seluruh data barang, pesanan, riwayat stok, dan bidang telah dikosongkan.");
         loadSettingsData();
       }
     } catch (err) {
       console.error(err);
-      alert("Gagal mereset database.");
+      alert("Gagal mengosongkan database.");
     } finally {
       setLoading(false);
     }
@@ -155,7 +169,7 @@ export default function AdminSettings() {
       {/* Title */}
       <div>
         <h2 className="text-2xl font-extrabold text-slate-800">Pengaturan & Kontrol Sistem</h2>
-        <p className="text-sm text-slate-500">Konfigurasi profile kantor, nomor telepon admin penerima, kelola bidang, serta pemulihan server</p>
+        <p className="text-sm text-slate-500">Konfigurasi profil kantor, nomor kontak pengelola, sandi admin, serta pengelolaan bidang</p>
       </div>
 
       {successMsg && (
@@ -193,7 +207,7 @@ export default function AdminSettings() {
             {/* Admin WhatsApp number input format: 628xxxxxxxxxx */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                <Phone className="h-4 w-4 text-slate-400" /> Nomor Wa Admin (Format Penerima)
+                <Phone className="h-4 w-4 text-slate-400" /> Nomor WhatsApp Pengelola
               </label>
               <input
                 type="text"
@@ -203,6 +217,9 @@ export default function AdminSettings() {
                 className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-sm font-mono"
                 required
               />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Tampil di footer portal pegawai sebagai kontak yang bisa dihubungi via WhatsApp.
+              </p>
               <p className="text-[11px] text-slate-400 mt-1">
                 ⚠️ WAJIB menggunakan format kode negara saja (tanpa tanda + / angka 0 di depan). Mulai dari <strong>628...</strong>
               </p>
@@ -292,27 +309,35 @@ export default function AdminSettings() {
             </form>
           </div>
 
-          {/* Database Control Card (Seed / Factory format) */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <Database className="h-4.5 w-4.5 text-rose-600" />
-              <h3 className="font-extrabold text-slate-800 text-base">Pemeliharaan Server</h3>
-            </div>
+          {/* Destructive wipe — only rendered when opened with ?dev=1 */}
+          {showMaintenance && (
+            <div className="bg-white rounded-2xl border-2 border-rose-300 shadow-xs p-6 space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-rose-100">
+                <ShieldAlert className="h-4.5 w-4.5 text-rose-600" />
+                <h3 className="font-extrabold text-rose-700 text-base">Zona Berbahaya</h3>
+              </div>
 
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Gunakan kontrol di bawah ini untuk mengembalikan setelan bawaan pabrik serta mengisi file dengan dummy item ATK awal.
-            </p>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Tombol ini <strong className="text-rose-700">menghapus permanen</strong> seluruh data
+                barang, riwayat pesanan, riwayat stok, dan daftar bidang. Data
+                <strong className="text-rose-700"> tidak diisi ulang</strong> — katalog akan kosong
+                setelahnya, dan tidak ada cadangan untuk memulihkannya.
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Akun admin dan akun pegawai tidak ikut terhapus.
+              </p>
 
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleResetDB}
-                className="w-full py-2.5 px-4 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                <RefreshCw className="h-3.5 w-3.5 text-rose-600" /> Reset & Seed Dummy Awal
-              </button>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleResetDB}
+                  className="w-full py-2.5 px-4 bg-rose-600 text-white hover:bg-rose-700 border border-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Trash className="h-3.5 w-3.5" /> Kosongkan Seluruh Data
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

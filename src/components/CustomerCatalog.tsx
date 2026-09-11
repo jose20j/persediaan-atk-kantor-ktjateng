@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Item, Setting, Bidang, Customer } from "../types";
-import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut } from "lucide-react";
+import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut, Phone } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";
 
 interface CustomerCatalogProps {
@@ -407,11 +407,21 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
 
       {/* Customer Footer */}
       <footer className="bg-slate-900 text-slate-400 py-8 border-t border-slate-800">
-        <div className="w-full px-4 sm:px-6 lg:px-8 text-center flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="w-full px-4 sm:px-6 lg:px-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-3">
+          {settings.nomor_whatsapp_admin ? (
+            <a
+              href={`https://wa.me/${settings.nomor_whatsapp_admin}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs inline-flex items-center gap-1.5 hover:text-emerald-400 transition-colors"
+            >
+              <Phone className="h-3.5 w-3.5" />
+              Pengelola: {settings.nomor_whatsapp_admin}
+            </a>
+          ) : (
+            <span />
+          )}
           <p className="text-xs">&copy; Kejaksaan Tinggi Jawa Tengah - Jose Juan Sebastian, S.M.</p>
-          <div className="flex gap-4 text-xs font-medium text-slate-500">
-            <p>Sistem Persediaan ATK v1.3</p>
-          </div>
         </div>
       </footer>
 
