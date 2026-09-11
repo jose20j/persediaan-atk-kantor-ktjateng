@@ -4,3 +4,7 @@ dist
 .vercel
 .env*
 !.env.example
+
+# sisa debugging (root saja, jangan sentuh src/assets/images)
+*.log
+/test-*.png
