@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Item, Setting, Bidang, Customer } from "../types";
-import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut } from "lucide-react";
+import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut, ChevronDown } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";
 
 interface CustomerCatalogProps {
   customer: Customer;
-  onSwappedToAdmin: () => void;
   onViewOrders: () => void;
   onLogout: () => void;
 }
 
-export default function CustomerCatalog({ customer, onSwappedToAdmin, onViewOrders, onLogout }: CustomerCatalogProps) {
+export default function CustomerCatalog({ customer, onViewOrders, onLogout }: CustomerCatalogProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [settings, setSettings] = useState<Setting>({ nomor_whatsapp_admin: "", nama_kantor: "" });
   const [bidangs, setBidangs] = useState<Bidang[]>([]);
@@ -32,6 +31,28 @@ export default function CustomerCatalog({ customer, onSwappedToAdmin, onViewOrde
   });
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+
+  // Profile dropdown in the header
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showProfileMenu) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowProfileMenu(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [showProfileMenu]);
 
   // Load Data
   const loadData = async () => {
@@ -153,7 +174,7 @@ export default function CustomerCatalog({ customer, onSwappedToAdmin, onViewOrde
 
       {/* Modern Professional Header */}
       <header className="bg-teal-950 text-white shadow-lg border-b border-teal-900">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="w-full px-4 py-6 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="bg-white/10 p-1 rounded-xl border border-white/20 shadow-inner flex items-center justify-center shrink-0 w-11 h-11 bg-white/20">
               <img
@@ -168,47 +189,54 @@ export default function CustomerCatalog({ customer, onSwappedToAdmin, onViewOrde
               <p className="text-xs sm:text-sm text-teal-200 mt-0.5">Formulir Pesanan ATK Digital</p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-            {/* Customer info chip */}
-            <div className="hidden md:flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
-              <div className="h-6 w-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">
-                {customer.nama_lengkap.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white leading-none">{customer.nama_lengkap}</p>
-                <p className="text-[10px] text-teal-300">{customer.bidang}</p>
-              </div>
+          <div className="flex items-center gap-3">
+            {/* Profile chip — opens a menu holding the employee's own pages */}
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setShowProfileMenu(v => !v)}
+                aria-haspopup="menu"
+                aria-expanded={showProfileMenu}
+                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-xl px-3 py-2 border border-white/10 transition-all cursor-pointer"
+              >
+                <div className="h-6 w-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">
+                  {customer.nama_lengkap.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-left hidden sm:block">
+                  <p className="text-xs font-bold text-white leading-none">{customer.nama_lengkap}</p>
+                  <p className="text-[10px] text-teal-300">{customer.bidang}</p>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-teal-200 transition-transform ${showProfileMenu ? "rotate-180" : ""}`} />
+              </button>
+
+              {showProfileMenu && (
+                <div role="menu" className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50">
+                  <div className="px-4 py-3 border-b border-slate-100 sm:hidden">
+                    <p className="text-sm font-bold text-slate-800 leading-tight">{customer.nama_lengkap}</p>
+                    <p className="text-xs text-slate-500">{customer.bidang}</p>
+                  </div>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShowProfileMenu(false); onViewOrders(); }}
+                    className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 cursor-pointer transition-colors"
+                  >
+                    <ClipboardList className="h-4 w-4 text-teal-600" /> Pesanan Saya
+                  </button>
+                </div>
+              )}
             </div>
+
             <button
-              onClick={onViewOrders}
+              onClick={onLogout}
               className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              <ClipboardList className="h-4 w-4" /> Pesanan Saya
-            </button>
-            <button
-              onClick={() => setShowCartModal(true)}
-              className="relative px-5 py-2.5 bg-teal-600 hover:bg-teal-500 border border-teal-500 text-white rounded-xl font-bold text-sm transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-            >
-              <ShoppingBag className="h-4 w-4" />
-              Keranjang
-              {cart.length > 0 && (
-                <span className="bg-rose-500 text-white rounded-full text-[10px] sm:text-xs px-2 py-0.5 min-w-[20px] font-bold">
-                  {cart.reduce((total, c) => total + c.quantity, 0)}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={onSwappedToAdmin}
-              className="px-4 py-2.5 bg-teal-750/30 hover:bg-teal-750/60 border border-teal-500/30 text-teal-100 rounded-xl font-medium text-sm transition-all cursor-pointer text-center hidden sm:block"
-            >
-              Portal Admin ⚖️
+              <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">Keluar</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
         {/* Help Banner card */}
         <div className="bg-white rounded-2xl border border-teal-100 shadow-xs p-6 mb-8 flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden relative">
           <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-48 h-48 bg-teal-50/50 rounded-full -z-10" />
@@ -420,7 +448,7 @@ export default function CustomerCatalog({ customer, onSwappedToAdmin, onViewOrde
 
       {/* Customer Footer */}
       <footer className="bg-slate-900 text-slate-400 py-8 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="w-full px-4 sm:px-6 lg:px-8 text-center flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs">&copy; Kejaksaan Tinggi Jawa Tengah - Jose Juan Sebastian, S.M.</p>
           <div className="flex gap-4 text-xs font-medium text-slate-500">
             <p>Sistem Persediaan ATK v1.3</p>

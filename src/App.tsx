@@ -46,8 +46,11 @@ export default function App() {
       } catch {}
     }
 
-    if (isAdminLoggedIn()) {
-      // Admin session is separate, don't auto-switch
+    // Fallback entry point for the admin portal: ?admin=1
+    // The normal way in is the shared login form, which routes admins
+    // automatically. This stays as a way back in if that ever breaks.
+    if (new URLSearchParams(window.location.search).get("admin") === "1") {
+      setPov(isAdminLoggedIn() ? "admin_portal" : "admin_login");
     }
 
     getSettings().then(s => setOfficeName(s.nama_kantor)).catch(() => {});
@@ -127,7 +130,10 @@ export default function App() {
       <CustomerLogin
         officeName={officeName}
         onLogin={handleCustomerLogin}
-        onSwappedToAdmin={() => setPov("admin_login")}
+        onAdminLogin={() => {
+          setPov("admin_portal");
+          setActiveTab(1);
+        }}
       />
     );
   }
@@ -137,14 +143,6 @@ export default function App() {
     return (
       <CustomerCatalog
         customer={customer}
-        onSwappedToAdmin={() => {
-          if (isAdminLoggedIn()) {
-            setPov("admin_portal");
-            setActiveTab(1);
-          } else {
-            setPov("admin_login");
-          }
-        }}
         onViewOrders={() => setPov("customer_portal")}
         onLogout={handleCustomerLogout}
       />

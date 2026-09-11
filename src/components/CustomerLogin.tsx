@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Customer, Bidang } from "../types";
-import { loginCustomer, registerCustomer, getDepartments } from "../api";
-import { User, Lock, ArrowRight, UserPlus, LogIn, Building } from "lucide-react";
+import { loginCustomer, loginAdmin, registerCustomer, getDepartments } from "../api";
+import { User, Lock, UserPlus, LogIn, Building } from "lucide-react";
 
 interface CustomerLoginProps {
   officeName: string;
   onLogin: (customer: Customer) => void;
-  onSwappedToAdmin: () => void;
+  onAdminLogin: () => void;
 }
 
-export default function CustomerLogin({ officeName, onLogin, onSwappedToAdmin }: CustomerLoginProps) {
+export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: CustomerLoginProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [departments, setDepartments] = useState<Bidang[]>([]);
 
@@ -35,10 +35,22 @@ export default function CustomerLogin({ officeName, onLogin, onSwappedToAdmin }:
       setError("Username dan password wajib diisi.");
       return;
     }
+    const u = username.trim();
+    const p = password.trim();
     try {
       setLoading(true);
       setError("");
-      const customer = await loginCustomer(username.trim(), password.trim());
+
+      // Admin credentials are checked first so an admin lands straight in the
+      // admin portal. A failed attempt sets no session, so it is safe to run
+      // for every login.
+      const admin = await loginAdmin(u, p);
+      if (admin.success) {
+        onAdminLogin();
+        return;
+      }
+
+      const customer = await loginCustomer(u, p);
       localStorage.setItem("atk_customer", JSON.stringify(customer));
       onLogin(customer);
     } catch (err: any) {
@@ -213,15 +225,9 @@ export default function CustomerLogin({ officeName, onLogin, onSwappedToAdmin }:
             )}
           </div>
 
-          {/* Footer links */}
-          <div className="px-8 pb-6 flex items-center justify-between">
-            <p className="text-xs text-slate-400">Pegawai internal {officeName}</p>
-            <button
-              onClick={onSwappedToAdmin}
-              className="text-xs text-slate-400 hover:text-teal-600 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-            >
-              Portal Admin <ArrowRight className="h-3 w-3" />
-            </button>
+          {/* Footer */}
+          <div className="px-8 pb-6">
+            <p className="text-xs text-slate-400 text-center">Pegawai internal {officeName}</p>
           </div>
         </div>
       </div>
