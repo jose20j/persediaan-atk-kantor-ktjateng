@@ -11,6 +11,7 @@ export interface PDFOrderData {
   items: PDFOrderItem[];
   nama_pemesan: string;
   bidang: string;
+  unit?: string;
   keterangan_customer?: string;
   catatan_admin?: string;
   officeName: string;
@@ -159,10 +160,11 @@ export async function generateOrderPDF(order: PDFOrderData) {
   y += sectionH + 14;
 
   const infoRows: [string, string][] = [
-    ["Nama Pemesan",        order.nama_pemesan],
-    ["Bidang / Departemen", order.bidang || "Umum"],
-    ["Tanggal Permintaan",  createdDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })],
-    ["Keterangan",          order.keterangan_customer || "-"],
+    ["Nama Pemesan",       order.nama_pemesan],
+    ["Bidang",             order.bidang || "Umum"],
+    ...(order.unit ? [["Unit", order.unit] as [string, string]] : []),
+    ["Tanggal Permintaan", createdDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })],
+    ["Keterangan",         order.keterangan_customer || "-"],
   ];
   const lw = 145;
   infoRows.forEach(([label, val], i) => {

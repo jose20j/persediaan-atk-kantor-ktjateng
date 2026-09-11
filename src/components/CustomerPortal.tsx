@@ -139,6 +139,7 @@ export default function CustomerPortal({ customer, officeName, onLogout, onBrows
       })),
       nama_pemesan:      firstItem.nama_pemesan,
       bidang:            firstItem.bidang,
+      unit:              firstItem.unit,
       keterangan_customer: firstItem.keterangan_customer,
       catatan_admin:     group.items.map(r => r.catatan_admin).filter(Boolean).join("; ") || undefined,
       officeName,

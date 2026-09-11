@@ -17,6 +17,7 @@ interface OrderGroup {
   requests: RequestOrder[];
   pemesan: string;
   bidang: string;
+  unit?: string;
   created_at: string;
   status: GroupStatus;
   hasPending: boolean;
@@ -96,6 +97,7 @@ export default function AdminRequests() {
         requests: reqs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
         pemesan: reqs[0].nama_pemesan,
         bidang: reqs[0].bidang,
+        unit: reqs[0].unit,
         created_at: reqs[0].created_at,
         status: computeGroupStatus(reqs),
         hasPending: reqs.some(r => r.status === "Pending"),
@@ -232,6 +234,7 @@ export default function AdminRequests() {
       })),
       nama_pemesan:       group.pemesan,
       bidang:             group.bidang,
+      unit:               group.unit,
       keterangan_customer: group.keterangan_customer,
       catatan_admin:      group.requests.map(r => r.catatan_admin).filter(Boolean).join("; ") || undefined,
       officeName,
@@ -375,7 +378,7 @@ export default function AdminRequests() {
                       </p>
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 mt-0.5">
                         <MapPin className="h-3 w-3 text-teal-500 shrink-0" />
-                        {group.bidang}
+                        {group.bidang}{group.unit ? ` · ${group.unit}` : ""}
                       </span>
                       <p className="text-[10px] text-slate-400 font-mono mt-1">
                         {new Date(group.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
@@ -446,7 +449,7 @@ export default function AdminRequests() {
                 <div>
                   <h3 className="font-bold text-lg">Konfirmasi & Proses Pesanan</h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {selectedGroup.pemesan} · {selectedGroup.bidang}
+                    {selectedGroup.pemesan} · {selectedGroup.bidang}{selectedGroup.unit ? ` · ${selectedGroup.unit}` : ""}
                   </p>
                 </div>
               </div>
@@ -464,7 +467,7 @@ export default function AdminRequests() {
                     <div>
                       <p className="font-bold text-slate-800 text-sm">{selectedGroup.pemesan}</p>
                       <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                        <MapPin className="h-3 w-3 text-slate-400" /> {selectedGroup.bidang}
+                        <MapPin className="h-3 w-3 text-slate-400" /> {selectedGroup.bidang}{selectedGroup.unit ? ` · ${selectedGroup.unit}` : ""}
                       </p>
                     </div>
                     <div className="ml-auto text-right">

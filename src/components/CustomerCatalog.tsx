@@ -115,6 +115,7 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
         item_id: itemCart.item.id,
         nama_pemesan: orderForm.nama_pemesan,
         bidang: orderForm.bidang || "Umum",
+        unit: customer.unit || undefined,
         jumlah_diminta: itemCart.quantity,
         keterangan_customer: orderForm.keterangan_customer,
         customer_id: customer.id,

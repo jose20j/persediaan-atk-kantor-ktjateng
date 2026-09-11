@@ -15,6 +15,7 @@ export interface Customer {
   username: string;
   nama_lengkap: string;
   bidang: string;
+  unit?: string;
   created_at: string;
 }
 
@@ -25,6 +26,7 @@ export interface RequestOrder {
   customer_id?: string;
   nama_pemesan: string;
   bidang: string;
+  unit?: string;
   jumlah_diminta: number;
   jumlah_disetujui: number | null;
   keterangan_customer?: string;
@@ -56,6 +58,8 @@ export interface StockHistory {
 export interface Bidang {
   id: string;
   nama_bidang: string;
+  /** null/undefined = bidang (tingkat atas); terisi = unit di bawah bidang itu */
+  parent_id?: string | null;
 }
 
 export interface Stats {

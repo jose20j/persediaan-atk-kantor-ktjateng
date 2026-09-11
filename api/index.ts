@@ -33,17 +33,17 @@ app.get("/api/health", (_req, res) => {
 // CUSTOMER AUTH
 app.post("/api/auth/customer/register", async (req, res) => {
   try {
-    const { username, password, nama_lengkap, bidang } = req.body;
+    const { username, password, nama_lengkap, bidang, unit } = req.body;
     if (!username?.trim() || !password?.trim() || !nama_lengkap?.trim() || !bidang?.trim())
       return res.status(400).json({ error: "Semua field wajib diisi." });
     const { data: existing } = await db().from("customers").select("id").eq("username", username.trim()).maybeSingle();
     if (existing) return res.status(409).json({ error: "Username sudah digunakan, pilih username lain." });
     const newCustomer = {
       id: genId("cus"), username: username.trim(), password: password.trim(),
-      nama_lengkap: nama_lengkap.trim(), bidang: bidang.trim(),
+      nama_lengkap: nama_lengkap.trim(), bidang: bidang.trim(), unit: unit?.trim() || null,
       created_at: new Date().toISOString(),
     };
-    const { data, error } = await db().from("customers").insert(newCustomer).select("id, username, nama_lengkap, bidang, created_at").single();
+    const { data, error } = await db().from("customers").insert(newCustomer).select("id, username, nama_lengkap, bidang, unit, created_at").single();
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -54,7 +54,7 @@ app.post("/api/auth/customer/login", async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username dan password wajib diisi." });
     const { data, error } = await db().from("customers")
-      .select("id, username, nama_lengkap, bidang, created_at")
+      .select("id, username, nama_lengkap, bidang, unit, created_at")
       .eq("username", username.trim())
       .eq("password", password.trim())
       .maybeSingle();
@@ -214,13 +214,13 @@ app.get("/api/requests", async (_req, res) => {
 
 app.post("/api/requests", async (req, res) => {
   try {
-    const { item_id, nama_pemesan, bidang, jumlah_diminta, keterangan_customer, order_id, customer_id } = req.body;
+    const { item_id, nama_pemesan, bidang, unit, jumlah_diminta, keterangan_customer, order_id, customer_id } = req.body;
     const { data: itm, error: itmErr } = await db().from("items").select("*").eq("id", item_id).single();
     if (itmErr || !itm) return res.status(404).json({ error: "Barang tidak valid." });
     if ((itm.stok || 0) <= (itm.stok_minimum || 0)) return res.status(400).json({ error: `Barang "${itm.nama_barang}" stok minimum tercapai.` });
     const newRequest = {
       id: genId("req"), order_id: order_id || genId("ord"),
-      item_id, nama_pemesan, bidang,
+      item_id, nama_pemesan, bidang, unit: unit || null,
       jumlah_diminta: parseInt(jumlah_diminta) || 1,
       jumlah_disetujui: null, keterangan_customer: keterangan_customer || "",
       catatan_admin: "", status: "Pending",
@@ -306,11 +306,16 @@ app.get("/api/departments", async (_req, res) => {
 
 app.post("/api/departments", async (req, res) => {
   try {
-    const { nama_bidang } = req.body;
-    if (!nama_bidang?.trim()) return res.status(400).json({ error: "Nama bidang tidak boleh kosong" });
-    const { data: existing } = await db().from("departments").select("id").ilike("nama_bidang", nama_bidang.trim()).single();
-    if (existing) return res.status(400).json({ error: "Bidang sudah terdaftar." });
-    const { data, error } = await db().from("departments").insert({ id: genId("bdg"), nama_bidang: nama_bidang.trim() }).select().single();
+    const { nama_bidang, parent_id } = req.body;
+    if (!nama_bidang?.trim()) return res.status(400).json({ error: "Nama tidak boleh kosong" });
+    // Nama hanya perlu unik dalam lingkupnya: antar bidang, atau antar unit
+    // dalam satu bidang. Sebuah unit boleh senama dengan bidang induknya —
+    // "Pemulihan Aset" memang begitu di struktur kantor.
+    let dupe = db().from("departments").select("id").ilike("nama_bidang", nama_bidang.trim());
+    dupe = parent_id ? dupe.eq("parent_id", parent_id) : dupe.is("parent_id", null);
+    const { data: existing } = await dupe.maybeSingle();
+    if (existing) return res.status(400).json({ error: parent_id ? "Unit sudah terdaftar di bidang ini." : "Bidang sudah terdaftar." });
+    const { data, error } = await db().from("departments").insert({ id: genId(parent_id ? "unt" : "bid"), nama_bidang: nama_bidang.trim(), parent_id: parent_id || null }).select().single();
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }

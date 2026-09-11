@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Customer, Bidang } from "../types";
 import { loginCustomer, loginAdmin, registerCustomer, getDepartments } from "../api";
-import { User, Lock, UserPlus, LogIn, Building } from "lucide-react";
+import { User, Lock, UserPlus, LogIn, Building, Layers } from "lucide-react";
 
 interface CustomerLoginProps {
   officeName: string;
@@ -17,17 +17,33 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
   const [username, setUsername]       = useState("");
   const [password, setPassword]       = useState("");
   const [namaLengkap, setNamaLengkap] = useState("");
-  const [bidang, setBidang]           = useState("");
+  const [bidangId, setBidangId]       = useState("");
+  const [unitId, setUnitId]           = useState("");
 
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
 
+  // parent_id kosong = bidang (tingkat atas); terisi = unit di bawahnya
+  const bidangList = departments.filter(d => !d.parent_id);
+  const unitList   = departments.filter(d => d.parent_id === bidangId);
+
+  const namaBidang = bidangList.find(b => b.id === bidangId)?.nama_bidang || "";
+  const namaUnit   = unitList.find(u => u.id === unitId)?.nama_bidang || "";
+
   useEffect(() => {
     getDepartments().then(depts => {
       setDepartments(depts);
-      if (depts.length > 0) setBidang(depts[0].nama_bidang);
+      const first = depts.find(d => !d.parent_id);
+      if (first) setBidangId(first.id);
     }).catch(() => {});
   }, []);
+
+  // Unit selalu ikut bidang yang dipilih — pilihan lama tidak boleh tertinggal
+  // menempel pada bidang yang berbeda.
+  useEffect(() => {
+    const units = departments.filter(d => d.parent_id === bidangId);
+    setUnitId(units.length > 0 ? units[0].id : "");
+  }, [bidangId, departments]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,8 +89,12 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim() || !namaLengkap.trim() || !bidang) {
+    if (!username.trim() || !password.trim() || !namaLengkap.trim() || !namaBidang) {
       setError("Semua field wajib diisi.");
+      return;
+    }
+    if (unitList.length > 0 && !namaUnit) {
+      setError("Pilih unit Anda pada bidang tersebut.");
       return;
     }
     if (password.length < 6) {
@@ -84,7 +104,13 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
     try {
       setLoading(true);
       setError("");
-      const customer = await registerCustomer({ username: username.trim(), password: password.trim(), nama_lengkap: namaLengkap.trim(), bidang });
+      const customer = await registerCustomer({
+        username: username.trim(),
+        password: password.trim(),
+        nama_lengkap: namaLengkap.trim(),
+        bidang: namaBidang,
+        unit: namaUnit || undefined,
+      });
       localStorage.setItem("atk_customer", JSON.stringify(customer));
       onLogin(customer);
     } catch (err: any) {
@@ -181,25 +207,35 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Bidang / Departemen</label>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Bidang</label>
                   <div className="relative">
                     <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    {departments.length > 0 ? (
-                      <select
-                        value={bidang} onChange={e => setBidang(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 appearance-none"
-                        required
-                      >
-                        {departments.map(d => <option key={d.id} value={d.nama_bidang}>{d.nama_bidang}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        type="text" value={bidang} onChange={e => setBidang(e.target.value)}
-                        placeholder="Nama bidang Anda"
-                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500"
-                        required
-                      />
-                    )}
+                    <select
+                      value={bidangId} onChange={e => setBidangId(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 appearance-none"
+                      required
+                    >
+                      {bidangList.length === 0 && <option value="">Memuat daftar bidang…</option>}
+                      {bidangList.map(b => <option key={b.id} value={b.id}>{b.nama_bidang}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Unit menyesuaikan bidang yang dipilih di atas */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Unit</label>
+                  <div className="relative">
+                    <Layers className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <select
+                      value={unitId} onChange={e => setUnitId(e.target.value)}
+                      disabled={unitList.length === 0}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 appearance-none disabled:text-slate-400"
+                      required={unitList.length > 0}
+                    >
+                      {unitList.length === 0
+                        ? <option value="">Bidang ini belum punya unit</option>
+                        : unitList.map(u => <option key={u.id} value={u.id}>{u.nama_bidang}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div>

@@ -460,7 +460,7 @@ export async function createRequest(order: Omit<RequestOrder, "id" | "jumlah_dis
   throw new Error(errData.error || "Gagal mengirim pesanan ke server.");
 }
 
-export async function registerCustomer(data: { username: string; password: string; nama_lengkap: string; bidang: string }): Promise<Customer> {
+export async function registerCustomer(data: { username: string; password: string; nama_lengkap: string; bidang: string; unit?: string }): Promise<Customer> {
   await checkBackend();
   if (useLocalFallback) throw new Error("Server tidak tersedia. Pendaftaran membutuhkan koneksi server.");
   const res = await fetch("/api/auth/customer/register", {
@@ -580,23 +580,28 @@ export async function getDepartments(): Promise<Bidang[]> {
   return getLocal("atk_bidang", DEFAULT_BIDANG);
 }
 
-export async function createDepartment(nama_bidang: string): Promise<Bidang> {
+export async function createDepartment(nama_bidang: string, parent_id?: string | null): Promise<Bidang> {
   await checkBackend();
   if (!useLocalFallback) {
     try {
       const res = await fetch("/api/departments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nama_bidang })
+        body: JSON.stringify({ nama_bidang, parent_id: parent_id || null })
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || "Gagal menambahkan.");
+    } catch (e: any) {
+      if (e instanceof Error && e.message !== "Failed to fetch") throw e;
+    }
   }
 
   const dps = getLocal("atk_bidang", DEFAULT_BIDANG);
   const newDept: Bidang = {
-    id: "bdg-" + Math.random().toString(36).substr(2, 9),
-    nama_bidang: nama_bidang.trim()
+    id: (parent_id ? "unt-" : "bid-") + Math.random().toString(36).substr(2, 9),
+    nama_bidang: nama_bidang.trim(),
+    parent_id: parent_id || null
   };
   dps.push(newDept);
   setLocal("atk_bidang", dps);

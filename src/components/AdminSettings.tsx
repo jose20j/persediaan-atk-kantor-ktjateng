@@ -26,6 +26,8 @@ export default function AdminSettings() {
   const [officeName, setOfficeName] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newDept, setNewDept] = useState("");
+  // "" = tambah sebagai bidang baru; berisi id = tambah sebagai unit di bawahnya
+  const [newDeptParent, setNewDeptParent] = useState("");
 
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingDept, setSavingDept] = useState(false);
@@ -34,6 +36,8 @@ export default function AdminSettings() {
   // The wipe control is kept out of the normal settings page: one stray click
   // destroys every item, order and stock record with no backup to restore from.
   // Reach it deliberately with ?dev=1 when seeding a fresh environment.
+  const bidangList = departments.filter(d => !d.parent_id);
+
   const showMaintenance =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("dev") === "1";
@@ -100,7 +104,7 @@ export default function AdminSettings() {
 
     try {
       setSavingDept(true);
-      const added = await createDepartment(newDept);
+      const added = await createDepartment(newDept, newDeptParent || null);
       if (added) {
         setNewDept("");
         loadSettingsData();
@@ -113,7 +117,16 @@ export default function AdminSettings() {
   };
 
   const handleDeleteDept = async (id: string, name: string) => {
-    const isConfirmed = window.confirm(`Apakah Anda yakin ingin menghapus bidang "${name}"?`);
+    // Menghapus bidang ikut menghapus seluruh unit di bawahnya (ON DELETE
+    // CASCADE), jadi jumlahnya harus disebut sebelum admin menyetujui.
+    const anakCount = departments.filter(d => d.parent_id === id).length;
+    const isConfirmed = window.confirm(
+      anakCount > 0
+        ? `Hapus bidang "${name}" beserta ${anakCount} unit di bawahnya?\n\n` +
+          `Akun pegawai yang sudah terdaftar tidak ikut terhapus, tetapi bidang ` +
+          `dan unit mereka tidak akan lagi cocok dengan daftar ini.`
+        : `Apakah Anda yakin ingin menghapus "${name}"?`
+    );
     if (!isConfirmed) return;
 
     try {
@@ -261,40 +274,75 @@ export default function AdminSettings() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Building className="h-4.5 w-4.5 text-teal-600" />
-              <h3 className="font-extrabold text-slate-800 text-base">Manajemen Bidang</h3>
+              <h3 className="font-extrabold text-slate-800 text-base">Manajemen Bidang &amp; Unit</h3>
             </div>
 
-            {/* List of current departments */}
-            <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-              {departments.length === 0 ? (
+            {/* Two-level list: each bidang with its units nested beneath */}
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {bidangList.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">Belum ada bidang terdaftar.</p>
               ) : (
-                departments.map((dept) => (
-                  <div
-                    key={dept.id}
-                    className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-100"
-                  >
-                    <span className="text-xs font-bold text-slate-700">{dept.nama_bidang}</span>
-                    <button
-                      onClick={() => handleDeleteDept(dept.id, dept.nama_bidang)}
-                      className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 transition-colors"
-                      title="Hapus Bidang"
-                    >
-                      <Trash className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))
+                bidangList.map((bidang) => {
+                  const units = departments.filter(d => d.parent_id === bidang.id);
+                  return (
+                    <div key={bidang.id}>
+                      <div className="flex justify-between items-center p-2.5 bg-teal-50 rounded-xl border border-teal-100">
+                        <span className="text-xs font-extrabold text-teal-900">
+                          {bidang.nama_bidang}
+                          <span className="ml-2 font-mono font-normal text-teal-600">{units.length} unit</span>
+                        </span>
+                        <button
+                          onClick={() => handleDeleteDept(bidang.id, bidang.nama_bidang)}
+                          className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Hapus bidang beserta seluruh unitnya"
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {units.length > 0 && (
+                        <div className="mt-1 ml-3 pl-3 border-l-2 border-slate-100 space-y-1">
+                          {units.map(unit => (
+                            <div
+                              key={unit.id}
+                              className="flex justify-between items-center py-1.5 px-2.5 bg-slate-50 rounded-lg border border-slate-100"
+                            >
+                              <span className="text-[11px] font-semibold text-slate-600">{unit.nama_bidang}</span>
+                              <button
+                                onClick={() => handleDeleteDept(unit.id, unit.nama_bidang)}
+                                className="text-rose-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Hapus unit"
+                              >
+                                <Trash className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
 
-            {/* Add department form */}
-            <form onSubmit={handleAddDept} className="pt-2 border-t border-slate-100">
+            {/* Add — either a new bidang, or a unit under an existing one */}
+            <form onSubmit={handleAddDept} className="pt-2 border-t border-slate-100 space-y-2">
+              <select
+                value={newDeptParent}
+                onChange={(e) => setNewDeptParent(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-lg px-3 py-2 text-xs cursor-pointer"
+              >
+                <option value="">Tambah sebagai bidang baru</option>
+                {bidangList.map(b => (
+                  <option key={b.id} value={b.id}>Tambah unit di bawah: {b.nama_bidang}</option>
+                ))}
+              </select>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={newDept}
                   onChange={(e) => setNewDept(e.target.value)}
-                  placeholder="Nama bidang baru..."
+                  placeholder={newDeptParent ? "Nama unit baru..." : "Nama bidang baru..."}
                   className="flex-1 bg-slate-50 border border-slate-200 text-slate-800 rounded-lg px-3 py-2 text-xs"
                   required
                 />

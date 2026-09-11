@@ -43,7 +43,7 @@ export default function ReportExport() {
   // 3: Rekap permintaan per bidang
   // 4: Barang stok menipis
   // 5: Selisih permintaan (analisis yang sering tidak terpenuhi penuh)
-  const [selectedReportType, setSelectedReportType] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [selectedReportType, setSelectedReportType] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
   useEffect(() => {
     const loadReportData = async () => {
@@ -96,6 +96,7 @@ export default function ReportExport() {
         Tanggal: new Date(req.created_at).toLocaleDateString("id-ID"),
         Pemesan: req.nama_pemesan,
         Bidang: req.bidang,
+        Unit: req.unit || "-",
         "Nama ATK": req.itemName || "ATK",
         "Jumlah Diminta": diminta,
         "Jumlah Disetujui": req.status === "Pending" ? "Pending" : disetujui,
@@ -138,6 +139,48 @@ export default function ReportExport() {
         "Tingkat Pemenuhan (%)": `${rate}%`
       };
     });
+  };
+
+  // 4. Data Processor: Rekap per Unit (rincian di dalam tiap bidang)
+  const getRekapUnitData = () => {
+    const unitStats: {
+      [key: string]: {
+        bidang: string; unit: string;
+        totalRequests: number; totalDiminta: number; totalDisetujui: number;
+      }
+    } = {};
+
+    requests.filter(req => {
+      const d = toLocalDateStr(req.created_at);
+      return d >= startDate && d <= endDate;
+    }).forEach(req => {
+      const bName = req.bidang || "Lain-Lain";
+      const uName = req.unit || "(tanpa unit)";
+      const key = `${bName}||${uName}`;
+      if (!unitStats[key]) {
+        unitStats[key] = { bidang: bName, unit: uName, totalRequests: 0, totalDiminta: 0, totalDisetujui: 0 };
+      }
+      unitStats[key].totalRequests += 1;
+      unitStats[key].totalDiminta += req.jumlah_diminta;
+      if (req.status === "Selesai" && req.jumlah_disetujui !== null) {
+        unitStats[key].totalDisetujui += req.jumlah_disetujui;
+      }
+    });
+
+    return Object.values(unitStats)
+      .sort((a, b) => a.bidang.localeCompare(b.bidang) || a.unit.localeCompare(b.unit))
+      .map((meta, idx) => {
+        const rate = meta.totalDiminta > 0 ? Math.round((meta.totalDisetujui / meta.totalDiminta) * 100) : 0;
+        return {
+          No: idx + 1,
+          Bidang: meta.bidang,
+          Unit: meta.unit,
+          "Total Permintaan": meta.totalRequests,
+          "Total Item Diminta": meta.totalDiminta,
+          "Total Item Disetujui": meta.totalDisetujui,
+          "Tingkat Pemenuhan (%)": `${rate}%`
+        };
+      });
   };
 
   // 4. Data Processor: Barang Stok Menipis
@@ -208,6 +251,8 @@ export default function ReportExport() {
         return "Laporan Barang Kritis Stok Menipis";
       case 5:
         return `Laporan Analisis Selisih Pemenuhan Barang ${range}`;
+      case 6:
+        return `Laporan Rekap Kuantitas per Unit ${range}`;
     }
   };
 
@@ -223,6 +268,8 @@ export default function ReportExport() {
         return getStokMenipisData();
       case 5:
         return getSelisihPermintaanData();
+      case 6:
+        return getRekapUnitData();
     }
   };
 
@@ -363,6 +410,7 @@ export default function ReportExport() {
           { key: 1, label: "Laporan Stok ATK", desc: "Kondisi fisik riil gudang saat ini" },
           { key: 2, label: "Riwayat Transaksi", desc: "Filter berkas tanggal pemesan" },
           { key: 3, label: "Kuantitas Bidang", desc: "Rekap total disetujui per bidang" },
+          { key: 6, label: "Kuantitas Unit", desc: "Rincian per unit di dalam tiap bidang" },
           { key: 4, label: "Barang Stok Kritis", desc: "Item minim butuh restock segera" },
           { key: 5, label: "Selisih Pemenuhan", desc: "Analisis parsial yang sering kurang" }
         ].map((btn) => (
