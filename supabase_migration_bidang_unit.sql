@@ -1,6 +1,6 @@
 -- ============================================================
 -- MIGRASI: Bidang 2 tingkat (Bidang -> Unit)
--- Kejaksaan Tinggi Jawa Tengah — 8 bidang, 36 unit
+-- Kejaksaan Tinggi Jawa Tengah — 8 bidang, 38 unit
 --
 -- Jalankan sekali di: Supabase Dashboard > SQL Editor > New Query
 -- Aman dijalankan ulang (idempoten).
@@ -15,14 +15,15 @@
 ALTER TABLE departments
   ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES departments(id) ON DELETE CASCADE;
 
--- Constraint lama melarang nama kembar di SELURUH tabel.
--- Itu memblokir "Pemulihan Aset", yang di struktur kantor merupakan
--- bidang sekaligus unit tunggal di bawahnya.
+-- Constraint lama melarang nama kembar di SELURUH tabel — terlalu ketat
+-- untuk struktur pohon. Dengan aturan itu, dua bidang berbeda tidak boleh
+-- punya unit bernama sama (misal "Sub Bagian Umum" di dua bidang), dan
+-- sebuah unit tidak boleh senama dengan bidang induknya.
 ALTER TABLE departments DROP CONSTRAINT IF EXISTS departments_nama_bidang_key;
 
--- Penggantinya: nama harus unik di dalam lingkupnya masing-masing.
+-- Penggantinya: nama cukup unik di dalam lingkupnya masing-masing.
 -- Dua bidang tidak boleh senama; dua unit dalam satu bidang tidak boleh
--- senama; tapi unit boleh senama dengan bidang induknya.
+-- senama; selain itu bebas.
 DROP INDEX IF EXISTS departments_unik_bidang;
 DROP INDEX IF EXISTS departments_unik_unit;
 CREATE UNIQUE INDEX departments_unik_bidang
@@ -63,7 +64,7 @@ ON CONFLICT (id) DO UPDATE
   SET nama_bidang = EXCLUDED.nama_bidang, parent_id = EXCLUDED.parent_id;
 
 -- ------------------------------------------------------------
--- 5. Isi 36 UNIT di bawah masing-masing bidang
+-- 5. Isi 38 UNIT di bawah masing-masing bidang
 -- ------------------------------------------------------------
 INSERT INTO departments (id, nama_bidang, parent_id) VALUES
   -- Pembinaan (8)
@@ -100,7 +101,7 @@ INSERT INTO departments (id, nama_bidang, parent_id) VALUES
   ('unt-pidsus-sekre',   'Sekretaris Asisten Tindak Pidana Khusus',            'bid-pidsus'),
 
   -- Pidana Militer (4)
-  ('unt-pidmil-sekre',   'Sekre Aspidmil',                                     'bid-pidmil'),
+  ('unt-pidmil-sekre',   'Sekretaris Asisten Pidana Militer',                  'bid-pidmil'),
   ('unt-pidmil-dakan',   'Seksi Penindakan',                                   'bid-pidmil'),
   ('unt-pidmil-tut',     'Seksi Penuntutan',                                   'bid-pidmil'),
   ('unt-pidmil-eksekusi','Seksi Eksekusi',                                     'bid-pidmil'),
@@ -113,10 +114,12 @@ INSERT INTO departments (id, nama_bidang, parent_id) VALUES
 
   -- Pengawasan (2)
   ('unt-was-auditor',    'Auditor',                                            'bid-pengawasan'),
-  ('unt-was-sekre',      'Sekre Aswas',                                        'bid-pengawasan'),
+  ('unt-was-sekre',      'Sekretaris Asisten Pengawasan',                      'bid-pengawasan'),
 
-  -- Pemulihan Aset (1)
-  ('unt-pa-pemulihan',   'Pemulihan Aset',                                     'bid-pemulihan-aset')
+  -- Pemulihan Aset (3)
+  ('unt-pa-manajemen',   'Subbidang Manajemen Pengelolaan Aset',               'bid-pemulihan-aset'),
+  ('unt-pa-penelusuran', 'Subbidang Penelusuran dan Perampasan Aset',          'bid-pemulihan-aset'),
+  ('unt-pa-penyelesaian','Subbidang Penyelesaian Aset',                        'bid-pemulihan-aset')
 ON CONFLICT (id) DO UPDATE
   SET nama_bidang = EXCLUDED.nama_bidang, parent_id = EXCLUDED.parent_id;
 
