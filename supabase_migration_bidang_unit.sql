@@ -43,9 +43,14 @@ ALTER TABLE requests  ADD COLUMN IF NOT EXISTS unit TEXT;
 
 -- ------------------------------------------------------------
 -- 3. Bersihkan data uji
+--    Akun pegawai ikut dihapus: satu-satunya akun yang ada masih
+--    ber-bidang "Operasional" dari struktur dummy. Pendaftaran ulang
+--    akan memakai bidang + unit yang benar.
+--    Pengaturan kantor (nama, nomor WA, sandi admin) TIDAK tersentuh.
 -- ------------------------------------------------------------
 DELETE FROM stock_history;
 DELETE FROM requests;
+DELETE FROM customers;
 DELETE FROM departments;
 
 -- ------------------------------------------------------------
@@ -124,18 +129,8 @@ ON CONFLICT (id) DO UPDATE
   SET nama_bidang = EXCLUDED.nama_bidang, parent_id = EXCLUDED.parent_id;
 
 -- ------------------------------------------------------------
--- 6. Akun pegawai yang sudah ada
---    Akun `jose` masih ber-bidang "Operasional" (bidang dummy yang
---    sudah dihapus). Ganti kedua nilai di bawah dengan penempatan
---    yang sebenarnya, lalu jalankan barisnya.
--- ------------------------------------------------------------
--- UPDATE customers
---   SET bidang = 'Pembinaan',
---       unit   = 'Sub Bagian Umum'
---   WHERE username = 'jose';
-
--- ------------------------------------------------------------
--- 7. Periksa hasilnya
+-- 6. Periksa hasilnya
+--    Harus keluar 8 baris: 8 + 7 + 5 + 5 + 4 + 4 + 3 + 2 = 38 unit.
 -- ------------------------------------------------------------
 SELECT b.nama_bidang AS bidang, COUNT(u.id) AS jumlah_unit
 FROM departments b
