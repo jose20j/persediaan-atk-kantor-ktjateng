@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Item, Setting, Bidang, Customer } from "../types";
-import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut, ChevronDown } from "lucide-react";
+import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut } from "lucide-react";
 import { getItems, createRequest, getSettings, getDepartments } from "../api";
 
 interface CustomerCatalogProps {
@@ -31,28 +31,6 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
   });
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
-
-  // Profile dropdown in the header
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showProfileMenu) return;
-    const onClickOutside = (e: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
-        setShowProfileMenu(false);
-      }
-    };
-    const onEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowProfileMenu(false);
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("mousedown", onClickOutside);
-      document.removeEventListener("keydown", onEscape);
-    };
-  }, [showProfileMenu]);
 
   // Load Data
   const loadData = async () => {
@@ -190,40 +168,21 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Profile chip — opens a menu holding the employee's own pages */}
-            <div className="relative" ref={profileRef}>
-              <button
-                onClick={() => setShowProfileMenu(v => !v)}
-                aria-haspopup="menu"
-                aria-expanded={showProfileMenu}
-                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-xl px-3 py-2 border border-white/10 transition-all cursor-pointer"
-              >
-                <div className="h-6 w-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">
-                  {customer.nama_lengkap.charAt(0).toUpperCase()}
-                </div>
-                <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-white leading-none">{customer.nama_lengkap}</p>
-                  <p className="text-[10px] text-teal-300">{customer.bidang}</p>
-                </div>
-                <ChevronDown className={`h-4 w-4 text-teal-200 transition-transform ${showProfileMenu ? "rotate-180" : ""}`} />
-              </button>
-
-              {showProfileMenu && (
-                <div role="menu" className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50">
-                  <div className="px-4 py-3 border-b border-slate-100 sm:hidden">
-                    <p className="text-sm font-bold text-slate-800 leading-tight">{customer.nama_lengkap}</p>
-                    <p className="text-xs text-slate-500">{customer.bidang}</p>
-                  </div>
-                  <button
-                    role="menuitem"
-                    onClick={() => { setShowProfileMenu(false); onViewOrders(); }}
-                    className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 cursor-pointer transition-colors"
-                  >
-                    <ClipboardList className="h-4 w-4 text-teal-600" /> Pesanan Saya
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Profile chip — goes straight to the employee's own orders */}
+            <button
+              onClick={onViewOrders}
+              title="Lihat Pesanan Saya"
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-xl px-3 py-2 border border-white/10 transition-all cursor-pointer"
+            >
+              <div className="h-6 w-6 rounded-full bg-teal-500 flex items-center justify-center text-xs font-bold shrink-0">
+                {customer.nama_lengkap.charAt(0).toUpperCase()}
+              </div>
+              <div className="text-left hidden sm:block">
+                <p className="text-xs font-bold text-white leading-none">{customer.nama_lengkap}</p>
+                <p className="text-[10px] text-teal-300">{customer.bidang}</p>
+              </div>
+              <ClipboardList className="h-4 w-4 text-teal-200" />
+            </button>
 
             <button
               onClick={onLogout}
