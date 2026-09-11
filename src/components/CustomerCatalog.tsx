@@ -206,7 +206,14 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
             <div>
               <h2 className="text-lg font-bold text-slate-800">Bagaimana Cara Memesan ATK?</h2>
               <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-                Cari kertas, pulpen, atau alat perkantoran lainnya pada katalog di bawah ini. Masukkan beberapa barang yang Anda butuhkan ke <strong className="text-teal-700">Keranjang Pesanan</strong>, klik ikon keranjang untuk menyesuaikan jumlahnya, lalu kirim sekaligus. Admin akan memproses permintaan Anda dan mengonfirmasi jumlah yang dapat dipenuhi.
+                Cari kertas, pulpen, atau alat perkantoran lainnya pada katalog di bawah ini. Tekan{" "}
+                <strong className="text-teal-700">Pesan</strong> pada barang yang Anda butuhkan, lalu atur
+                jumlahnya dengan tombol <strong className="text-teal-700">+</strong> dan{" "}
+                <strong className="text-teal-700">−</strong> yang muncul di kartu barang tersebut. Setelah
+                semua terpilih, tekan <strong className="text-teal-700">Lanjut Pesan</strong> pada bilah di
+                bawah layar untuk memeriksa dan mengirim sekaligus. Admin akan memproses permintaan Anda
+                dan mengonfirmasi jumlah yang dapat dipenuhi — statusnya bisa Anda pantau kapan saja lewat{" "}
+                <strong className="text-teal-700">nama Anda</strong> di kanan atas.
               </p>
             </div>
           </div>
