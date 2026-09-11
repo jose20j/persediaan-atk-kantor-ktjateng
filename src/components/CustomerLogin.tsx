@@ -41,18 +41,29 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
       setLoading(true);
       setError("");
 
-      // Admin credentials are checked first so an admin lands straight in the
-      // admin portal. A failed attempt sets no session, so it is safe to run
-      // for every login.
+      // Employees are the overwhelming majority of logins, so try them first
+      // and keep that path down to a single round trip. Admins pay one extra
+      // request, which they hit far less often.
+      try {
+        const customer = await loginCustomer(u, p);
+        localStorage.setItem("atk_customer", JSON.stringify(customer));
+        onLogin(customer);
+        return;
+      } catch (customerErr: any) {
+        // A connection problem must surface as itself rather than being
+        // reported as a wrong password, so only fall through on a rejection.
+        if (/Server tidak tersedia/i.test(customerErr?.message || "")) throw customerErr;
+      }
+
+      // Not an employee account — check whether these are admin credentials.
+      // A failed attempt stores no session, so this is safe to run.
       const admin = await loginAdmin(u, p);
       if (admin.success) {
         onAdminLogin();
         return;
       }
 
-      const customer = await loginCustomer(u, p);
-      localStorage.setItem("atk_customer", JSON.stringify(customer));
-      onLogin(customer);
+      setError("Username atau password salah.");
     } catch (err: any) {
       setError(err.message || "Login gagal.");
     } finally {
