@@ -33,10 +33,15 @@ interface ItemForm {
 }
 
 function computeGroupStatus(reqs: RequestOrder[]): GroupStatus {
-  if (reqs.every(r => r.status === "Selesai"))  return "Selesai";
   if (reqs.every(r => r.status === "Ditolak"))  return "Ditolak";
+  // Approving some items and turning the rest down still finishes the order:
+  // there is nothing left for the admin to act on, and the employee has been
+  // handed goods, so the proof of receipt has to be available. Previously
+  // this landed on "Sebagian" and the Bukti PDF button never appeared.
+  if (reqs.every(r => r.status === "Selesai" || r.status === "Ditolak")) return "Selesai";
   if (reqs.every(r => r.status === "Diproses")) return "Diproses";
   if (reqs.every(r => r.status === "Pending"))  return "Pending";
+  // Genuinely mid-way: part handled, part still waiting.
   return "Sebagian";
 }
 
