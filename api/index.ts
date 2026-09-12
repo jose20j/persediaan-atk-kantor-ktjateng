@@ -186,6 +186,24 @@ app.post("/api/auth/customer/login", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+/**
+ * Confirms the session is still good and hands back the current account.
+ * Called on load so a dead token drops the employee at the login screen
+ * instead of a catalogue that refuses to accept an order, and so a bidang
+ * the admin corrected takes effect without them logging out.
+ */
+app.get("/api/customer/me", requireCustomer, async (req: any, res) => {
+  try {
+    const { data, error } = await db().from("customers")
+      .select("id, username, nama_lengkap, bidang, unit, no_telepon, status, created_at")
+      .eq("id", req.customerId).single();
+    if (error || !data) return res.status(401).json({ error: "Akun tidak ditemukan." });
+    if (data.status !== "Disetujui")
+      return res.status(403).json({ error: "Akun Anda belum disetujui Admin ATK." });
+    res.json(data);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/api/customer/orders", requireCustomer, async (req: any, res) => {
   try {
     // The account comes from the signed token, never from the query string,

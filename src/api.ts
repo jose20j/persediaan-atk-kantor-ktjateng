@@ -596,6 +596,20 @@ export async function loginCustomer(username: string, password: string): Promise
   return customer as Customer;
 }
 
+/** Null means the stored session is no longer usable. */
+export async function getCurrentCustomer(): Promise<Customer | null> {
+  await checkBackend();
+  if (useLocalFallback) return null;
+  try {
+    const res = await customerFetch("/api/customer/me");
+    if (!res.ok) { clearCustomerSession(); return null; }
+    return await res.json();
+  } catch {
+    clearCustomerSession();
+    return null;
+  }
+}
+
 export async function getCustomerOrders(): Promise<RequestOrder[]> {
   await checkBackend();
   if (useLocalFallback) throw new Error("Server tidak tersedia.");

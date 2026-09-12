@@ -10,7 +10,7 @@ import AdminSettings from "./components/AdminSettings";
 import AdminCustomers from "./components/AdminCustomers";
 import ReportExport from "./components/ReportExport";
 import { Customer } from "./types";
-import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus, getCustomers, clearCustomerSession } from "./api";
+import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus, getCustomers, clearCustomerSession, getCurrentCustomer } from "./api";
 import {
   LayoutDashboard, Package, FileText, Sliders, Users,
   Settings, LogOut, ArrowLeft, Bell, X as XIcon
@@ -48,6 +48,19 @@ export default function App() {
         const c: Customer = JSON.parse(saved);
         setCustomer(c);
         setPov("customer_catalog");
+        // Show the catalogue immediately, then confirm with the server. A
+        // dead token sends them back to the login screen instead of letting
+        // them fill a cart the server will refuse; a fresh record also picks
+        // up a bidang the admin has since corrected.
+        getCurrentCustomer().then(fresh => {
+          if (!fresh) {
+            setCustomer(null);
+            setPov("customer_login");
+            return;
+          }
+          setCustomer(fresh);
+          localStorage.setItem("atk_customer", JSON.stringify(fresh));
+        });
       } catch {}
     }
 
