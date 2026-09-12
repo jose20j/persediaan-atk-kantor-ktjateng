@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import stempelDisetujui from "../assets/images/STEMPEL DISETUJUI.png";
 import { Customer, RequestOrder } from "../types";
-import { getCustomerOrders } from "../api";
+import { CustomerSessionError, getCustomerOrders } from "../api";
 import { generateOrderPDF } from "../lib/generatePDF";
 import {
   ShoppingBag, Clock, CheckCircle, XCircle, Download,
@@ -100,9 +100,11 @@ export default function CustomerPortal({ customer, officeName, onLogout, onBrows
     try {
       setLoading(true);
       setError("");
-      const data = await getCustomerOrders(customer.id);
+      // No id is passed: the server reads it from the session token.
+      const data = await getCustomerOrders();
       setOrders(data);
     } catch (err: any) {
+      if (err instanceof CustomerSessionError) { onLogout(); return; }
       setError(err.message || "Gagal memuat pesanan.");
     } finally {
       setLoading(false);

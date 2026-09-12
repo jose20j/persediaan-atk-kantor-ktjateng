@@ -10,7 +10,7 @@ import AdminSettings from "./components/AdminSettings";
 import AdminCustomers from "./components/AdminCustomers";
 import ReportExport from "./components/ReportExport";
 import { Customer } from "./types";
-import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus, getCustomers } from "./api";
+import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus, getCustomers, clearCustomerSession } from "./api";
 import {
   LayoutDashboard, Package, FileText, Sliders, Users,
   Settings, LogOut, ArrowLeft, Bell, X as XIcon
@@ -38,9 +38,12 @@ export default function App() {
   useEffect(() => {
     initializeLocal();
 
-    // Restore customer session
+    // Restore the employee session only when a token backs it. Without
+    // one every action would 401, leaving them on a catalog that refuses
+    // to do anything.
     const saved = localStorage.getItem("atk_customer");
-    if (saved) {
+    const savedToken = localStorage.getItem("atk_customer_token");
+    if (saved && savedToken) {
       try {
         const c: Customer = JSON.parse(saved);
         setCustomer(c);
@@ -95,7 +98,7 @@ export default function App() {
   };
 
   const handleCustomerLogout = () => {
-    localStorage.removeItem("atk_customer");
+    clearCustomerSession();
     setCustomer(null);
     setPov("customer_login");
   };

@@ -309,6 +309,32 @@ function rethrowSession(e: unknown) {
   if (e instanceof AdminSessionError) throw e;
 }
 
+// ── Employee session ────────────────────────────────────────────
+export class CustomerSessionError extends Error {
+  constructor() { super("Sesi Anda telah berakhir. Silakan masuk kembali."); }
+}
+
+export function setCustomerToken(token: string) {
+  localStorage.setItem("atk_customer_token", token);
+}
+export function clearCustomerSession() {
+  localStorage.removeItem("atk_customer_token");
+  localStorage.removeItem("atk_customer");
+}
+
+async function customerFetch(url: string, init: RequestInit = {}, withJson = false): Promise<Response> {
+  const token = localStorage.getItem("atk_customer_token");
+  const headers: Record<string, string> = { ...(init.headers as any || {}) };
+  if (token) headers["Authorization"] = "Bearer " + token;
+  if (withJson) headers["Content-Type"] = "application/json";
+  const res = await fetch(url, { ...init, headers });
+  if (res.status === 401) {
+    clearCustomerSession();
+    throw new CustomerSessionError();
+  }
+  return res;
+}
+
 export async function getItems(): Promise<Item[]> {
   await checkBackend();
   if (!useLocalFallback) {
@@ -477,7 +503,14 @@ export async function getRequests(): Promise<RequestOrder[]> {
   });
 }
 
-export async function createRequest(order: Omit<RequestOrder, "id" | "jumlah_disetujui" | "status" | "created_at" | "updated_at" | "catatan_admin">): Promise<RequestOrder> {
+/**
+ * Nama pemesan, bidang dan unit sengaja TIDAK dikirim: server mengambilnya
+ * dari akun yang ditunjuk token, supaya tidak bisa dipalsukan dari browser.
+ */
+export async function createRequest(order: {
+  item_id: string; jumlah_diminta: number;
+  keterangan_customer?: string; order_id?: string;
+}): Promise<RequestOrder> {
   await checkBackend();
   if (useLocalFallback) {
     if (_backendStatus === "supabase_missing") {
@@ -485,11 +518,10 @@ export async function createRequest(order: Omit<RequestOrder, "id" | "jumlah_dis
     }
     throw new Error("Server tidak dapat dijangkau. Periksa koneksi internet Anda dan coba lagi.");
   }
-  const res = await fetch("/api/requests", {
+  const res = await customerFetch("/api/requests", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(order)
-  });
+  }, true);
   if (res.ok) return await res.json();
   const errData = await res.json().catch(() => ({}));
   throw new Error(errData.error || "Gagal mengirim pesanan ke server.");
@@ -557,13 +589,17 @@ export async function loginCustomer(username: string, password: string): Promise
   const json = await res.json();
   if (res.status === 403) throw new AccountNotActiveError(json.error || "Akun belum aktif.");
   if (!res.ok) throw new Error(json.error || "Login gagal.");
-  return json as Customer;
+  // The token is what proves who this is on later calls; without it the
+  // server refuses to show orders or accept one.
+  if (json.token) setCustomerToken(json.token);
+  const { token, ...customer } = json;
+  return customer as Customer;
 }
 
-export async function getCustomerOrders(customer_id: string): Promise<RequestOrder[]> {
+export async function getCustomerOrders(): Promise<RequestOrder[]> {
   await checkBackend();
   if (useLocalFallback) throw new Error("Server tidak tersedia.");
-  const res = await fetch(`/api/customer/orders?customer_id=${encodeURIComponent(customer_id)}`);
+  const res = await customerFetch("/api/customer/orders");
   if (res.ok) return await res.json();
   throw new Error("Gagal memuat pesanan.");
 }

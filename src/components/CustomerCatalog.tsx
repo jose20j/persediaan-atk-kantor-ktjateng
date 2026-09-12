@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
-import { Item, Setting, Bidang, Customer } from "../types";
+import { Item, Setting, Customer } from "../types";
 import { Search, Filter, ShoppingBag, Send, AlertTriangle, Sparkles, Building, BookOpen, Check, Trash2, Plus, Minus, ClipboardList, LogOut, Phone } from "lucide-react";
-import { getItems, createRequest, getSettings, getDepartments } from "../api";
+import { getItems, createRequest, getSettings, CustomerSessionError } from "../api";
 
 interface CustomerCatalogProps {
   customer: Customer;
@@ -13,7 +13,6 @@ interface CustomerCatalogProps {
 export default function CustomerCatalog({ customer, onViewOrders, onLogout }: CustomerCatalogProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [settings, setSettings] = useState<Setting>({ nomor_whatsapp_admin: "", nama_kantor: "" });
-  const [bidangs, setBidangs] = useState<Bidang[]>([]);
   const [loading, setLoading] = useState(true);
 
   // States for search and filter
@@ -24,11 +23,8 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
   // Cart and Modal States
   const [cart, setCart] = useState<{ item: Item; quantity: number }[]>([]);
   const [showCartModal, setShowCartModal] = useState(false);
-  const [orderForm, setOrderForm] = useState({
-    nama_pemesan: customer.nama_lengkap,
-    bidang: customer.bidang,
-    keterangan_customer: ""
-  });
+  // Identitas tidak lagi bagian dari form — server mengambilnya dari akun.
+  const [orderForm, setOrderForm] = useState({ keterangan_customer: "" });
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
@@ -36,14 +32,12 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
   const loadData = async () => {
     try {
       setLoading(true);
-      const [fetchedItems, fetchedSettings, fetchedBidangs] = await Promise.all([
+      const [fetchedItems, fetchedSettings] = await Promise.all([
         getItems(),
-        getSettings(),
-        getDepartments()
+        getSettings()
       ]);
       setItems(fetchedItems);
       setSettings(fetchedSettings);
-      setBidangs(fetchedBidangs);
 
       // Process Categories
       const uniqueCategories = Array.from(new Set(fetchedItems.map(item => item.kategori)));
@@ -101,10 +95,6 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
       alert("Keranjang belanja Anda kosong!");
       return;
     }
-    if (!orderForm.nama_pemesan.trim()) {
-      alert("Silakan masukkan nama pemesan!");
-      return;
-    }
 
     try {
       setSubmittingOrder(true);
@@ -113,23 +103,20 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
       const requestPayloads = cart.map(itemCart => ({
         order_id: orderId,
         item_id: itemCart.item.id,
-        nama_pemesan: orderForm.nama_pemesan,
-        bidang: orderForm.bidang || "Umum",
-        unit: customer.unit || undefined,
         jumlah_diminta: itemCart.quantity,
         keterangan_customer: orderForm.keterangan_customer,
-        customer_id: customer.id,
       }));
 
       await Promise.all(requestPayloads.map(payload => createRequest(payload)));
 
       setCart([]);
       setShowCartModal(false);
-      setOrderForm(prev => ({ ...prev, nama_pemesan: "", keterangan_customer: "" }));
+      setOrderForm({ keterangan_customer: "" });
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 5000);
       loadData();
     } catch (err: any) {
+      if (err instanceof CustomerSessionError) { alert(err.message); onLogout(); return; }
       alert(err?.message || "Gagal meletakkan pesanan ATK!");
     } finally {
       setSubmittingOrder(false);
@@ -521,54 +508,29 @@ export default function CustomerCatalog({ customer, onViewOrders, onLogout }: Cu
                   )}
                 </div>
 
-                {/* Dropdown Select Division/Bidang */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                    <Building className="h-3.5 w-3.5 text-teal-600" /> Bidang / Departemen <span className="text-rose-500">*</span>
-                  </label>
-                  {bidangs.length > 0 ? (
-                    <select
-                      value={orderForm.bidang}
-                      onChange={(e) => setOrderForm({ ...orderForm, bidang: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-hidden focus:border-teal-500 focus:bg-white focus:ring-3 focus:ring-teal-100"
-                      required
-                    >
-                      {bidangs.map((b) => (
-                        <option key={b.id} value={b.nama_bidang}>
-                          {b.nama_bidang}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select
-                      value={orderForm.bidang}
-                      onChange={(e) => setOrderForm({ ...orderForm, bidang: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-sm"
-                      required
-                    >
-                      <option value="IT">IT</option>
-                      <option value="HRD">HRD</option>
-                      <option value="Keuangan">Keuangan</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Umum">Umum</option>
-                      <option value="Operasional">Operasional</option>
-                    </select>
-                  )}
-                </div>
-
-                {/* Text Input Pemesan */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Nama Lengkap Pemesan <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={orderForm.nama_pemesan}
-                    onChange={(e) => setOrderForm({ ...orderForm, nama_pemesan: e.target.value })}
-                    placeholder="Masukkan nama Anda..."
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-hidden focus:border-teal-500 focus:bg-white focus:ring-3 focus:ring-teal-100"
-                    required
-                  />
+                {/* Identity is taken from the signed-in account, not asked
+                    for. It used to be a free-text name and a dropdown of
+                    every department, which let anyone book their stationery
+                    to another bidang and made the per-unit recap unreliable.
+                    The server ignores whatever the browser sends anyway. */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pesanan atas nama</p>
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-teal-600 text-white flex items-center justify-center text-sm font-extrabold shrink-0">
+                      {customer.nama_lengkap.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{customer.nama_lengkap}</p>
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                        <Building className="h-3 w-3 text-teal-600 shrink-0" />
+                        {customer.bidang}
+                        {customer.unit && <span className="text-slate-400">· {customer.unit}</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Diambil dari akun Anda. Hubungi Admin ATK jika bidang atau unit ini keliru.
+                  </p>
                 </div>
 
                 {/* Text Area Keterangan */}

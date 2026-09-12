@@ -65,6 +65,46 @@ function verifyAdminToken(token: string | undefined): boolean {
   return Number(exp) > Date.now();
 }
 
+// Employee sessions work the same way, but carry which account they are.
+// Longer lived than the admin one: employees order occasionally and being
+// logged out mid-order is pure friction, while an admin session is the
+// keys to the whole inventory.
+const CUSTOMER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 hari
+
+function signCustomerToken(id: string): string {
+  const exp = String(Date.now() + CUSTOMER_TTL_MS);
+  const sig = crypto.createHmac("sha256", sessionSecret()).update(`cus|${id}|${exp}`).digest("hex");
+  return `${id}.${exp}.${sig}`;
+}
+
+/** Returns the customer id the token vouches for, or null. */
+function verifyCustomerToken(token: string | undefined): string | null {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [id, exp, sig] = parts;
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || !/^\d+$/.test(exp)) return null;
+
+  let expected: string;
+  try { expected = crypto.createHmac("sha256", sessionSecret()).update(`cus|${id}|${exp}`).digest("hex"); }
+  catch { return null; }
+
+  const a = Buffer.from(sig, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  if (Number(exp) <= Date.now()) return null;
+  return id;
+}
+
+function requireCustomer(req: any, res: any, next: any) {
+  const header = String(req.headers.authorization || "");
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const id = verifyCustomerToken(token);
+  if (!id) return res.status(401).json({ error: "Sesi Anda telah berakhir. Silakan masuk kembali." });
+  req.customerId = id;
+  next();
+}
+
 function requireAdmin(req: any, res: any, next: any) {
   const header = String(req.headers.authorization || "");
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -142,17 +182,17 @@ app.post("/api/auth/customer/login", async (req, res) => {
           : "Pendaftaran akun Anda ditolak. Silakan hubungi Admin ATK.",
       });
 
-    res.json(data);
+    res.json({ ...data, token: signCustomerToken(data.id) });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/api/customer/orders", async (req, res) => {
+app.get("/api/customer/orders", requireCustomer, async (req: any, res) => {
   try {
-    const { customer_id } = req.query;
-    if (!customer_id) return res.status(400).json({ error: "customer_id diperlukan." });
+    // The account comes from the signed token, never from the query string,
+    // so nobody can read another employee's history by naming their id.
     const { data, error } = await db().from("requests")
       .select("*, items(nama_barang, satuan)")
-      .eq("customer_id", customer_id)
+      .eq("customer_id", req.customerId)
       .order("created_at", { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json((data || []).map((r: any) => ({
@@ -335,19 +375,33 @@ app.get("/api/requests", requireAdmin, async (_req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/requests", async (req, res) => {
+app.post("/api/requests", requireCustomer, async (req: any, res) => {
   try {
-    const { item_id, nama_pemesan, bidang, unit, jumlah_diminta, keterangan_customer, order_id, customer_id } = req.body;
+    const { item_id, jumlah_diminta, keterangan_customer, order_id } = req.body;
+
+    // Who ordered, and for which bidang/unit, is read from the account the
+    // token names — never from the request body. Otherwise anyone could
+    // charge their stationery to another unit and the per-unit report would
+    // be recording whatever the browser felt like sending.
+    const { data: cust, error: custErr } = await db().from("customers")
+      .select("id, nama_lengkap, bidang, unit, status").eq("id", req.customerId).single();
+    if (custErr || !cust) return res.status(401).json({ error: "Akun tidak ditemukan. Silakan masuk kembali." });
+    if (cust.status !== "Disetujui")
+      return res.status(403).json({ error: "Akun Anda belum disetujui Admin ATK." });
+
     const { data: itm, error: itmErr } = await db().from("items").select("*").eq("id", item_id).single();
     if (itmErr || !itm) return res.status(404).json({ error: "Barang tidak valid." });
     if ((itm.stok || 0) <= (itm.stok_minimum || 0)) return res.status(400).json({ error: `Barang "${itm.nama_barang}" stok minimum tercapai.` });
     const newRequest = {
       id: genId("req"), order_id: order_id || genId("ord"),
-      item_id, nama_pemesan, bidang, unit: unit || null,
+      item_id,
+      nama_pemesan: cust.nama_lengkap,
+      bidang: cust.bidang,
+      unit: cust.unit || null,
       jumlah_diminta: parseInt(jumlah_diminta) || 1,
       jumlah_disetujui: null, keterangan_customer: keterangan_customer || "",
       catatan_admin: "", status: "Pending",
-      customer_id: customer_id || null,
+      customer_id: cust.id,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
     const { data, error } = await db().from("requests").insert(newRequest).select().single();
