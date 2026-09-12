@@ -7,11 +7,12 @@ import AdminDashboard from "./components/AdminDashboard";
 import AdminItems from "./components/AdminItems";
 import AdminRequests from "./components/AdminRequests";
 import AdminSettings from "./components/AdminSettings";
+import AdminCustomers from "./components/AdminCustomers";
 import ReportExport from "./components/ReportExport";
 import { Customer } from "./types";
-import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus } from "./api";
+import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus, getCustomers } from "./api";
 import {
-  LayoutDashboard, Package, FileText, Sliders,
+  LayoutDashboard, Package, FileText, Sliders, Users,
   Settings, LogOut, ArrowLeft, Bell, X as XIcon
 } from "lucide-react";
 
@@ -22,13 +23,14 @@ export default function App() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [officeName, setOfficeName] = useState("Portal ATK Kantor");
 
-  const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingAccounts, setPendingAccounts] = useState(0);
   const [showNewOrderNotif, setShowNewOrderNotif] = useState(false);
   const prevPendingCount = useRef(0);
   const [backendStatus, setBackendStatus] = useState<"ok" | "supabase_missing" | "function_failed" | "offline">("offline");
@@ -75,6 +77,12 @@ export default function App() {
       } catch {
         setBackendStatus(getBackendStatus());
       }
+      // Keep the account badge live too, so a waiting employee is visible
+      // without the admin having to open that page first.
+      try {
+        const accounts = await getCustomers();
+        setPendingAccounts(accounts.filter(c => c.status === "Menunggu").length);
+      } catch { /* badge saja — jangan ganggu alur utama */ }
     };
     poll();
     const interval = setInterval(poll, 30000);
@@ -250,6 +258,7 @@ export default function App() {
               { id: 1, label: "Statistik Ringkasan",  icon: LayoutDashboard, badge: 0 },
               { id: 2, label: "Manajemen Barang",     icon: Package,         badge: 0 },
               { id: 3, label: "Permintaan Masuk",     icon: FileText,        badge: pendingCount },
+              { id: 6, label: "Akun Pegawai",         icon: Users,           badge: pendingAccounts },
               { id: 4, label: "Export Laporan",       icon: Sliders,         badge: 0 },
               { id: 5, label: "Pengaturan & Kontrol", icon: Settings,        badge: 0 },
             ].map(tab => {
@@ -347,6 +356,7 @@ export default function App() {
           {activeTab === 3 && <AdminRequests />}
           {activeTab === 4 && <ReportExport />}
           {activeTab === 5 && <AdminSettings />}
+          {activeTab === 6 && <AdminCustomers onPendingChange={setPendingAccounts} />}
         </main>
       </div>
     </div>

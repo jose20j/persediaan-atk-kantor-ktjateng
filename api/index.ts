@@ -87,19 +87,34 @@ app.get("/api/health", (_req, res) => {
 // CUSTOMER AUTH
 app.post("/api/auth/customer/register", async (req, res) => {
   try {
-    const { username, password, nama_lengkap, bidang, unit } = req.body;
+    const { username, password, nama_lengkap, bidang, unit, no_telepon } = req.body;
     if (!username?.trim() || !password?.trim() || !nama_lengkap?.trim() || !bidang?.trim())
       return res.status(400).json({ error: "Semua field wajib diisi." });
+
+    const telp = String(no_telepon || "").replace(/[^0-9]/g, "");
+    if (!/^08\d{7,13}$/.test(telp))
+      return res.status(400).json({ error: "Nomor telepon harus diawali 08 dan terdiri dari 9-15 angka." });
+
+    // An employee account named like the admin would be tried first by the
+    // shared login form and could shut the real admin out of the portal.
+    const { data: cfg } = await db().from("settings").select("admin_username").single();
+    const reserved = String(cfg?.admin_username || "admin").toLowerCase();
+    if (username.trim().toLowerCase() === reserved)
+      return res.status(409).json({ error: "Username tersebut tidak dapat digunakan. Pilih username lain." });
+
     const { data: existing } = await db().from("customers").select("id").eq("username", username.trim()).maybeSingle();
     if (existing) return res.status(409).json({ error: "Username sudah digunakan, pilih username lain." });
+
     const newCustomer = {
       id: genId("cus"), username: username.trim(), password: password.trim(),
       nama_lengkap: nama_lengkap.trim(), bidang: bidang.trim(), unit: unit?.trim() || null,
+      no_telepon: telp, status: "Menunggu",
       created_at: new Date().toISOString(),
     };
-    const { data, error } = await db().from("customers").insert(newCustomer).select("id, username, nama_lengkap, bidang, unit, created_at").single();
+    const { error } = await db().from("customers").insert(newCustomer);
     if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json(data);
+    // No session is returned: the account cannot be used until approved.
+    res.status(201).json({ pending: true, message: "Pendaftaran terkirim. Akun Anda menunggu persetujuan Admin ATK." });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -108,12 +123,25 @@ app.post("/api/auth/customer/login", async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username dan password wajib diisi." });
     const { data, error } = await db().from("customers")
-      .select("id, username, nama_lengkap, bidang, unit, created_at")
+      .select("id, username, nama_lengkap, bidang, unit, no_telepon, status, alasan_ditolak, created_at")
       .eq("username", username.trim())
       .eq("password", password.trim())
       .maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(401).json({ error: "Username atau password salah." });
+
+    // Credentials are right but the account is not cleared for use yet.
+    // 403, not 401, so the shared login form does not mistake this for a
+    // wrong password and go on to try the admin credentials.
+    if (data.status === "Menunggu")
+      return res.status(403).json({ error: "Akun Anda masih menunggu persetujuan Admin ATK." });
+    if (data.status === "Ditolak")
+      return res.status(403).json({
+        error: data.alasan_ditolak
+          ? `Pendaftaran Anda ditolak: ${data.alasan_ditolak}`
+          : "Pendaftaran akun Anda ditolak. Silakan hubungi Admin ATK.",
+      });
+
     res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -130,6 +158,47 @@ app.get("/api/customer/orders", async (req, res) => {
     res.json((data || []).map((r: any) => ({
       ...r, itemName: r.items?.nama_barang || "Barang Terhapus", itemSatuan: r.items?.satuan || "unit", items: undefined,
     })));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── EMPLOYEE ACCOUNTS (admin only) ──────────────────────────────
+app.get("/api/customers", requireAdmin, async (_req, res) => {
+  try {
+    // Passwords are never sent out, not even to the admin panel.
+    const { data, error } = await db().from("customers")
+      .select("id, username, nama_lengkap, bidang, unit, no_telepon, status, alasan_ditolak, created_at, approved_at")
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/customers/:id/approve", requireAdmin, async (req, res) => {
+  try {
+    const { error } = await db().from("customers")
+      .update({ status: "Disetujui", approved_at: new Date().toISOString(), alasan_ditolak: null })
+      .eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/customers/:id/reject", requireAdmin, async (req, res) => {
+  try {
+    const { alasan } = req.body || {};
+    const { error } = await db().from("customers")
+      .update({ status: "Ditolak", alasan_ditolak: alasan?.trim() || null })
+      .eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/customers/:id", requireAdmin, async (req, res) => {
+  try {
+    const { error } = await db().from("customers").delete().eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

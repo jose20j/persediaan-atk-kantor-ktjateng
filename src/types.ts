@@ -16,6 +16,10 @@ export interface Customer {
   nama_lengkap: string;
   bidang: string;
   unit?: string;
+  no_telepon?: string;
+  status?: "Menunggu" | "Disetujui" | "Ditolak";
+  alasan_ditolak?: string | null;
+  approved_at?: string | null;
   created_at: string;
 }
 

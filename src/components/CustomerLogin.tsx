@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import { Customer, Bidang } from "../types";
-import { loginCustomer, loginAdmin, registerCustomer, getDepartments } from "../api";
-import { User, Lock, UserPlus, LogIn, Building, Layers } from "lucide-react";
+import { loginCustomer, loginAdmin, registerCustomer, getDepartments, AccountNotActiveError } from "../api";
+import { User, Lock, UserPlus, LogIn, Building, Layers, Phone, Clock } from "lucide-react";
 
 interface CustomerLoginProps {
   officeName: string;
@@ -17,11 +17,13 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
   const [username, setUsername]       = useState("");
   const [password, setPassword]       = useState("");
   const [namaLengkap, setNamaLengkap] = useState("");
+  const [noTelepon, setNoTelepon]     = useState("");
   const [bidangId, setBidangId]       = useState("");
   const [unitId, setUnitId]           = useState("");
 
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
+  const [pendingMsg, setPendingMsg] = useState("");
 
   // parent_id kosong = bidang (tingkat atas); terisi = unit di bawahnya
   const bidangList = departments.filter(d => !d.parent_id);
@@ -66,8 +68,10 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
         onLogin(customer);
         return;
       } catch (customerErr: any) {
-        // A connection problem must surface as itself rather than being
-        // reported as a wrong password, so only fall through on a rejection.
+        // Only a genuinely wrong employee login should fall through to the
+        // admin check. A pending/rejected account or a dead connection must
+        // surface as itself, not as "wrong password".
+        if (customerErr instanceof AccountNotActiveError) throw customerErr;
         if (/Server tidak tersedia/i.test(customerErr?.message || "")) throw customerErr;
       }
 
@@ -97,6 +101,11 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
       setError("Pilih unit Anda pada bidang tersebut.");
       return;
     }
+    const telp = noTelepon.replace(/[^0-9]/g, "");
+    if (!/^08\d{7,13}$/.test(telp)) {
+      setError("Nomor telepon harus diawali 08, contoh 081234567890.");
+      return;
+    }
     if (password.length < 6) {
       setError("Password minimal 6 karakter.");
       return;
@@ -104,15 +113,16 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
     try {
       setLoading(true);
       setError("");
-      const customer = await registerCustomer({
+      const res = await registerCustomer({
         username: username.trim(),
         password: password.trim(),
         nama_lengkap: namaLengkap.trim(),
         bidang: namaBidang,
         unit: namaUnit || undefined,
+        no_telepon: telp,
       });
-      localStorage.setItem("atk_customer", JSON.stringify(customer));
-      onLogin(customer);
+      // Registering does not sign anyone in any more — the account waits.
+      setPendingMsg(res.message || "Pendaftaran terkirim. Menunggu persetujuan Admin ATK.");
     } catch (err: any) {
       setError(err.message || "Pendaftaran gagal.");
     } finally {
@@ -139,7 +149,7 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
             {(["login", "register"] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => { setMode(m); setError(""); }}
+                onClick={() => { setMode(m); setError(""); setPendingMsg(""); }}
                 className={`py-4 text-sm font-bold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
                   mode === m
                     ? "bg-teal-600 text-white"
@@ -156,6 +166,29 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
             {error && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" /> {error}
+              </div>
+            )}
+
+            {/* Registration succeeded but the account is not usable yet —
+                say so plainly instead of dropping the employee back on a
+                login form that will refuse them. */}
+            {pendingMsg && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-center">
+                <div className="mx-auto h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                </div>
+                <p className="text-sm font-bold text-amber-900">Menunggu Persetujuan</p>
+                <p className="text-xs text-amber-800 leading-relaxed">{pendingMsg}</p>
+                <p className="text-[11px] text-amber-700">
+                  Anda belum bisa masuk sampai Admin ATK menyetujui akun ini.
+                  Silakan coba masuk kembali setelah mendapat konfirmasi.
+                </p>
+                <button
+                  onClick={() => { setPendingMsg(""); setMode("login"); }}
+                  className="text-xs font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
+                >
+                  Kembali ke halaman masuk
+                </button>
               </div>
             )}
 
@@ -192,7 +225,7 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
                   {loading ? "Memverifikasi..." : <><LogIn className="h-4 w-4" /> Masuk</>}
                 </button>
               </form>
-            ) : (
+            ) : pendingMsg ? null : (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Nama Lengkap</label>
@@ -205,6 +238,20 @@ export default function CustomerLogin({ officeName, onLogin, onAdminLogin }: Cus
                       required
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Nomor Telepon</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="tel" inputMode="numeric" value={noTelepon}
+                      onChange={e => setNoTelepon(e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="Contoh: 081234567890"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:bg-white"
+                      required
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">Diawali <strong>08</strong>, bukan 62. Dipakai admin untuk menghubungi Anda.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-1.5">Bidang</label>

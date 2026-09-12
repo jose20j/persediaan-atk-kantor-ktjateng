@@ -495,7 +495,11 @@ export async function createRequest(order: Omit<RequestOrder, "id" | "jumlah_dis
   throw new Error(errData.error || "Gagal mengirim pesanan ke server.");
 }
 
-export async function registerCustomer(data: { username: string; password: string; nama_lengkap: string; bidang: string; unit?: string }): Promise<Customer> {
+/** Registering no longer signs anyone in — the account waits for approval. */
+export async function registerCustomer(data: {
+  username: string; password: string; nama_lengkap: string;
+  bidang: string; unit?: string; no_telepon: string;
+}): Promise<{ pending: true; message: string }> {
   await checkBackend();
   if (useLocalFallback) throw new Error("Server tidak tersedia. Pendaftaran membutuhkan koneksi server.");
   const res = await fetch("/api/auth/customer/register", {
@@ -505,8 +509,42 @@ export async function registerCustomer(data: { username: string; password: strin
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Pendaftaran gagal.");
-  return json as Customer;
+  return json;
 }
+
+// ── Employee accounts, admin side ───────────────────────────────
+export async function getCustomers(): Promise<Customer[]> {
+  await checkBackend();
+  if (useLocalFallback) return [];
+  const res = await adminFetch("/api/customers");
+  if (!res.ok) throw new Error("Gagal memuat daftar akun pegawai.");
+  return await res.json();
+}
+
+export async function approveCustomer(id: string): Promise<void> {
+  const res = await adminFetch(`/api/customers/${id}/approve`, { method: "PUT" });
+  if (!res.ok) throw new Error("Gagal menyetujui akun.");
+}
+
+export async function rejectCustomer(id: string, alasan?: string): Promise<void> {
+  const res = await adminFetch(`/api/customers/${id}/reject`, {
+    method: "PUT", body: JSON.stringify({ alasan: alasan || "" }),
+  }, true);
+  if (!res.ok) throw new Error("Gagal menolak akun.");
+}
+
+export async function deleteCustomer(id: string): Promise<void> {
+  const res = await adminFetch(`/api/customers/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Gagal menghapus akun.");
+}
+
+/**
+ * The credentials matched but the account is not cleared for use — waiting
+ * for approval, or rejected. Distinct from a wrong password, because the
+ * shared login form must stop here instead of going on to try the admin
+ * credentials and then reporting "wrong password".
+ */
+export class AccountNotActiveError extends Error {}
 
 export async function loginCustomer(username: string, password: string): Promise<Customer> {
   await checkBackend();
@@ -517,6 +555,7 @@ export async function loginCustomer(username: string, password: string): Promise
     body: JSON.stringify({ username, password })
   });
   const json = await res.json();
+  if (res.status === 403) throw new AccountNotActiveError(json.error || "Akun belum aktif.");
   if (!res.ok) throw new Error(json.error || "Login gagal.");
   return json as Customer;
 }
