@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import stempelDisetujui from "../assets/images/STEMPEL DISETUJUI.png";
 import { RequestOrder, Item } from "../types";
@@ -7,7 +7,8 @@ import { generateOrderPDF } from "../lib/generatePDF";
 import {
   FileCheck, Search, AlertTriangle, FileText, User, MapPin, Info,
   Layers, ChevronRight, Package, Calendar, MessageSquare,
-  X, CheckCircle, XCircle, Clock, ShoppingBag, Truck, Download
+  X, CheckCircle, XCircle, Clock, ShoppingBag, Truck, Download,
+  ChevronDown, ChevronUp
 } from "lucide-react";
 
 type GroupStatus = "Pending" | "Diproses" | "Selesai" | "Ditolak" | "Sebagian";
@@ -65,6 +66,8 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   });
 
+  // Peeking at what was ordered should not require generating a PDF.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<OrderGroup | null>(null);
   const [groupForms, setGroupForms] = useState<Record<string, ItemForm>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -380,8 +383,11 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredGroups.map((group, idx) => (
-                  <tr key={group.order_id} className="hover:bg-slate-50/40 transition-colors">
+                {filteredGroups.map((group, idx) => {
+                  const isOpen = expandedId === group.order_id;
+                  return (
+                  <React.Fragment key={group.order_id}>
+                  <tr className="hover:bg-slate-50/40 transition-colors">
                     <td className="py-4 px-5 text-center">
                       <span className="inline-flex items-center justify-center w-7 h-7 bg-slate-100 rounded-full text-xs font-bold text-slate-600">
                         {idx + 1}
@@ -403,12 +409,19 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
                     </td>
 
                     <td className="py-4 px-5 text-center">
-                      <div className="inline-flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-lg">
+                      <button
+                        onClick={() => setExpandedId(isOpen ? null : group.order_id)}
+                        title={isOpen ? "Sembunyikan rincian barang" : "Lihat rincian barang"}
+                        className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-teal-50 hover:text-teal-700 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      >
                         <ShoppingBag className="h-3.5 w-3.5 text-slate-500" />
                         <span className="text-xs font-bold text-slate-700">
                           {group.requests.length} item
                         </span>
-                      </div>
+                        {isOpen
+                          ? <ChevronUp className="h-3.5 w-3.5 text-slate-500" />
+                          : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
+                      </button>
                     </td>
 
                     <td className="py-4 px-5 text-center">
@@ -448,7 +461,63 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
                       </div>
                     </td>
                   </tr>
-                ))}
+
+                  {isOpen && (
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={5} className="px-5 pb-5 pt-0">
+                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase">
+                                <th className="py-2.5 px-4 text-left">Barang</th>
+                                <th className="py-2.5 px-4 text-center">Satuan</th>
+                                <th className="py-2.5 px-4 text-center">Diminta</th>
+                                <th className="py-2.5 px-4 text-center">Disetujui</th>
+                                <th className="py-2.5 px-4 text-center">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {group.requests.map(r => (
+                                <tr key={r.id}>
+                                  <td className="py-2.5 px-4 font-medium text-slate-800">{r.itemName || "—"}</td>
+                                  <td className="py-2.5 px-4 text-center text-slate-500 text-xs">{r.itemSatuan || "—"}</td>
+                                  <td className="py-2.5 px-4 text-center font-mono font-bold text-slate-700">{r.jumlah_diminta}</td>
+                                  <td className="py-2.5 px-4 text-center font-mono font-bold">
+                                    {r.jumlah_disetujui != null ? (
+                                      <span className={r.jumlah_disetujui < r.jumlah_diminta ? "text-rose-600" : "text-teal-600"}>
+                                        {r.jumlah_disetujui}
+                                      </span>
+                                    ) : <span className="text-slate-300">—</span>}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-center"><StatusBadge status={r.status} /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+
+                          {group.keterangan_customer && (
+                            <div className="px-4 py-3 border-t border-slate-100 bg-slate-50">
+                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Keterangan Pemesan</p>
+                              <p className="text-xs text-slate-700 italic">"{group.keterangan_customer}"</p>
+                            </div>
+                          )}
+                          {group.requests.some(r => r.catatan_admin) && (
+                            <div className="px-4 py-3 border-t border-amber-100 bg-amber-50">
+                              <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">Catatan Admin</p>
+                              {group.requests.filter(r => r.catatan_admin).map(r => (
+                                <p key={r.id} className="text-xs text-amber-800 italic">
+                                  {r.itemName}: "{r.catatan_admin}"
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

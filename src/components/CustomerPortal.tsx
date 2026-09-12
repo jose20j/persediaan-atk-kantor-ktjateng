@@ -319,7 +319,35 @@ export default function CustomerPortal({ customer, officeName, onLogout, onBrows
                     {isExpanded && (
                       <div className="px-6 pb-5 pt-1">
                         <div className="bg-slate-50 rounded-xl border border-slate-100 overflow-hidden">
-                          <table className="w-full text-sm">
+                          {/* Phones: one card per item. Five columns cannot fit
+                              in ~370px — the table spilled past the screen edge
+                              and item names broke one word per line. */}
+                          <div className="sm:hidden divide-y divide-slate-200">
+                            {group.items.map(item => (
+                              <div key={item.id} className="p-3.5 space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="font-bold text-slate-800 text-sm leading-snug flex-1">{item.itemName || "—"}</p>
+                                  <StatusBadge status={item.status} />
+                                </div>
+                                <div className="flex items-center gap-4 text-xs">
+                                  <span className="text-slate-500">
+                                    Diminta <strong className="font-mono text-slate-800">{item.jumlah_diminta}</strong>
+                                    <span className="text-slate-400"> {item.itemSatuan}</span>
+                                  </span>
+                                  <span className="text-slate-500">
+                                    Disetujui{" "}
+                                    {item.jumlah_disetujui != null ? (
+                                      <strong className={`font-mono ${item.jumlah_disetujui < item.jumlah_diminta ? "text-rose-600" : "text-teal-600"}`}>
+                                        {item.jumlah_disetujui}
+                                      </strong>
+                                    ) : <span className="text-slate-300">—</span>}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <table className="w-full text-sm hidden sm:table">
                             <thead>
                               <tr className="bg-slate-100 text-xs font-bold text-slate-500 uppercase">
                                 <th className="py-2.5 px-4 text-left">Barang</th>
