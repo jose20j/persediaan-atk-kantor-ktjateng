@@ -32,7 +32,8 @@ export default function App() {
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingAccounts, setPendingAccounts] = useState(0);
   const [showNewOrderNotif, setShowNewOrderNotif] = useState(false);
-  const prevPendingCount = useRef(0);
+  const prevPendingCount = useRef(-1); // -1 = belum pernah polling
+  const [lastActivity, setLastActivity] = useState<string | null>(null);
   const [backendStatus, setBackendStatus] = useState<"ok" | "supabase_missing" | "function_failed" | "offline">("offline");
 
   useEffect(() => {
@@ -82,20 +83,21 @@ export default function App() {
     if (pov !== "admin_portal") return;
     const poll = async () => {
       try {
-        const { pendingOrders, pendingAccounts } = await getCounts();
+        const { pendingOrders, pendingAccounts, lastActivity: act } = await getCounts();
         setBackendStatus(getBackendStatus());
-        if (prevPendingCount.current > 0 && pendingOrders > prevPendingCount.current) {
+        if (prevPendingCount.current >= 0 && pendingOrders > prevPendingCount.current) {
           setShowNewOrderNotif(true);
         }
         prevPendingCount.current = pendingOrders;
         setPendingCount(pendingOrders);
         setPendingAccounts(pendingAccounts);
+        setLastActivity(act);
       } catch {
         setBackendStatus(getBackendStatus());
       }
     };
     poll();
-    const interval = setInterval(poll, 30000);
+    const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
   }, [pov]);
 
@@ -363,7 +365,7 @@ export default function App() {
             />
           )}
           {activeTab === 2 && <AdminItems />}
-          {activeTab === 3 && <AdminRequests />}
+          {activeTab === 3 && <AdminRequests refreshKey={lastActivity} />}
           {activeTab === 4 && <ReportExport />}
           {activeTab === 5 && <AdminSettings />}
           {activeTab === 6 && <AdminCustomers onPendingChange={setPendingAccounts} />}

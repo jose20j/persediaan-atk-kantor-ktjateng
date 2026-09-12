@@ -408,9 +408,20 @@ app.get("/api/counts", requireAdmin, async (_req, res) => {
       .from("customers").select("id", { count: "exact", head: true }).eq("status", "Menunggu");
     if (cErr) return res.status(500).json({ error: cErr.message });
 
+    // A change marker for the admin list to watch. The count alone is not
+    // enough: if one order is completed while another arrives in the same
+    // interval the total is unchanged, yet the list is stale. One indexed
+    // row, so it stays cheap.
+    const { data: latest } = await db()
+      .from("requests").select("created_at").order("created_at", { ascending: false }).limit(1);
+
     // Several items share one order_id; the badge counts orders, not items.
     const orders = new Set((pendingRows || []).map((r: any) => r.order_id || r.id));
-    res.json({ pendingOrders: orders.size, pendingAccounts: pendingAccounts || 0 });
+    res.json({
+      pendingOrders: orders.size,
+      pendingAccounts: pendingAccounts || 0,
+      lastActivity: latest?.[0]?.created_at || null,
+    });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

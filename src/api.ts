@@ -548,9 +548,9 @@ export async function registerCustomer(data: {
  * The sidebar badge numbers. Cheap on purpose — see /api/counts.
  * Never fall back to sample data here: a wrong badge is worse than none.
  */
-export async function getCounts(): Promise<{ pendingOrders: number; pendingAccounts: number }> {
+export async function getCounts(): Promise<{ pendingOrders: number; pendingAccounts: number; lastActivity: string | null }> {
   await checkBackend();
-  if (useLocalFallback) return { pendingOrders: 0, pendingAccounts: 0 };
+  if (useLocalFallback) return { pendingOrders: 0, pendingAccounts: 0, lastActivity: null };
   const res = await adminFetch("/api/counts");
   if (!res.ok) throw new Error("Gagal memuat ringkasan.");
   return await res.json();

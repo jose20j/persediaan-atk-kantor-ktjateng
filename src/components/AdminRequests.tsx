@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import kejaksaanLogo from "../assets/images/Kejaksaan_Agung_Republik_Indonesia_new_logo.png";
 import stempelDisetujui from "../assets/images/STEMPEL DISETUJUI.png";
 import { RequestOrder, Item } from "../types";
@@ -40,7 +40,7 @@ function computeGroupStatus(reqs: RequestOrder[]): GroupStatus {
   return "Sebagian";
 }
 
-export default function AdminRequests() {
+export default function AdminRequests({ refreshKey }: { refreshKey?: string | null }) {
   const [requests, setRequests] = useState<RequestOrder[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
@@ -64,9 +64,11 @@ export default function AdminRequests() {
   const [groupForms, setGroupForms] = useState<Record<string, ItemForm>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const loadData = async () => {
+  // Diam-diam: menyegarkan karena ada pesanan baru tidak boleh membuat
+  // seluruh halaman berkedip jadi layar "memuat".
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [fetchedRequests, fetchedItems, fetchedDepts, fetchedSettings] = await Promise.all([
         getRequests(), getItems(), getDepartments(), getSettings()
       ]);
@@ -82,6 +84,16 @@ export default function AdminRequests() {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  // Pesanan baru masuk (ditandai perubahan lastActivity dari penghitung).
+  // Dulu daftar ini hanya dimuat sekali, sehingga admin harus pindah menu
+  // lalu kembali agar pesanan baru terlihat.
+  const firstKey = useRef(true);
+  useEffect(() => {
+    if (firstKey.current) { firstKey.current = false; return; }  // sudah dimuat saat mount
+    if (selectedGroup) return;  // jangan ganggu admin yang sedang memproses
+    loadData(true);
+  }, [refreshKey]);
 
   const orderGroups = useMemo<OrderGroup[]>(() => {
     const grouped: Record<string, RequestOrder[]> = {};
