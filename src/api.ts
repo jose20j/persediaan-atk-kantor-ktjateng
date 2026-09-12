@@ -247,7 +247,10 @@ export async function loginAdmin(username: string, password: string): Promise<{ 
         body: JSON.stringify({ username, password })
       });
       if (res.ok) {
-        localStorage.setItem("atk_admin_token", "logged_in");
+        const data = await res.json();
+        // The server-issued token is what actually opens the admin
+        // endpoints; storing anything else just hides the UI.
+        if (data.token) localStorage.setItem("atk_admin_token", data.token);
         return { success: true };
       }
       const data = await res.json();
@@ -260,7 +263,7 @@ export async function loginAdmin(username: string, password: string): Promise<{ 
   // Local Storage Auth
   const settings = getLocal("atk_settings", DEFAULT_SETTINGS);
   if (username === "admin" && password === (settings.admin_pass || "admin123")) {
-    localStorage.setItem("atk_admin_token", "logged_in");
+    localStorage.setItem("atk_admin_token", "local");
     return { success: true };
   }
   return { success: false, message: "Username atau password salah!" };
@@ -271,7 +274,39 @@ export function logoutAdmin() {
 }
 
 export function isAdminLoggedIn(): boolean {
-  return localStorage.getItem("atk_admin_token") === "logged_in";
+  return !!localStorage.getItem("atk_admin_token");
+}
+
+/** Headers for the admin-only endpoints. Without these the server answers 401. */
+function adminHeaders(withJson = false): Record<string, string> {
+  const h: Record<string, string> = {};
+  const token = localStorage.getItem("atk_admin_token");
+  if (token) h["Authorization"] = "Bearer " + token;
+  if (withJson) h["Content-Type"] = "application/json";
+  return h;
+}
+
+/**
+ * Every admin call goes through here. An expired session must not fall
+ * through to the local sample data — an admin would then be looking at
+ * fictional orders believing they are real. Fail loudly instead.
+ */
+export class AdminSessionError extends Error {
+  constructor() { super("Sesi admin telah berakhir. Silakan masuk kembali."); }
+}
+
+async function adminFetch(url: string, init: RequestInit = {}, withJson = false): Promise<Response> {
+  const res = await fetch(url, { ...init, headers: { ...adminHeaders(withJson), ...(init.headers || {}) } });
+  if (res.status === 401) {
+    localStorage.removeItem("atk_admin_token");
+    throw new AdminSessionError();
+  }
+  return res;
+}
+
+/** Re-throw a rejected session; every other failure may still fall back. */
+function rethrowSession(e: unknown) {
+  if (e instanceof AdminSessionError) throw e;
 }
 
 export async function getItems(): Promise<Item[]> {
@@ -289,13 +324,13 @@ export async function createItem(item: Omit<Item, "id" | "created_at" | "updated
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch("/api/items", {
+      const res = await adminFetch("/api/items", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(true),
         body: JSON.stringify(item)
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const items = getLocal("atk_items", DEFAULT_ITEMS);
@@ -327,13 +362,13 @@ export async function updateItem(id: string, item: Partial<Item>): Promise<Item>
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch(`/api/items/${id}`, {
+      const res = await adminFetch(`/api/items/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(true),
         body: JSON.stringify(item)
       });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const items = getLocal("atk_items", DEFAULT_ITEMS);
@@ -374,13 +409,13 @@ export async function restockItem(id: string, jumlah: number, keterangan: string
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch(`/api/items/${id}/restock`, {
+      const res = await adminFetch(`/api/items/${id}/restock`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(true),
         body: JSON.stringify({ jumlah, keterangan })
       });
       if (res.ok) return true;
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const items = getLocal("atk_items", DEFAULT_ITEMS);
@@ -409,9 +444,9 @@ export async function deleteItem(id: string): Promise<boolean> {
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch(`/api/items/${id}`, { method: "DELETE" });
+      const res = await adminFetch(`/api/items/${id}`, { method: "DELETE", headers: adminHeaders() });
       if (res.ok) return true;
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const items = getLocal("atk_items", DEFAULT_ITEMS);
@@ -424,9 +459,9 @@ export async function getRequests(): Promise<RequestOrder[]> {
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch("/api/requests");
+      const res = await adminFetch("/api/requests", { headers: adminHeaders() });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const requests = getLocal("atk_requests", DEFAULT_REQUESTS);
@@ -499,9 +534,9 @@ export async function processRequest(id: string, jumlah_disetujui: number, catat
   if (useLocalFallback) {
     throw new Error("Server tidak tersedia. Tidak dapat memproses pesanan.");
   }
-  const res = await fetch(`/api/requests/${id}/process`, {
+  const res = await adminFetch(`/api/requests/${id}/process`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: adminHeaders(true),
     body: JSON.stringify({ jumlah_disetujui, catatan_admin })
   });
   if (res.ok) return true;
@@ -512,7 +547,7 @@ export async function processRequest(id: string, jumlah_disetujui: number, catat
 export async function completeRequest(id: string): Promise<boolean> {
   await checkBackend();
   if (useLocalFallback) throw new Error("Server tidak tersedia.");
-  const res = await fetch(`/api/requests/${id}/complete`, { method: "PUT" });
+  const res = await adminFetch(`/api/requests/${id}/complete`, { method: "PUT", headers: adminHeaders() });
   if (res.ok) return true;
   const errData = await res.json().catch(() => ({}));
   throw new Error(errData.error || "Gagal menyelesaikan pesanan.");
@@ -523,9 +558,9 @@ export async function rejectRequest(id: string, catatan_admin: string): Promise<
   if (useLocalFallback) {
     throw new Error("Server tidak tersedia. Tidak dapat menolak pesanan.");
   }
-  const res = await fetch(`/api/requests/${id}/reject`, {
+  const res = await adminFetch(`/api/requests/${id}/reject`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: adminHeaders(true),
     body: JSON.stringify({ catatan_admin })
   });
   if (res.ok) return true;
@@ -552,13 +587,13 @@ export async function updateSettings(settings: Partial<Setting & { new_password?
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch("/api/settings", {
+      const res = await adminFetch("/api/settings", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(true),
         body: JSON.stringify(settings)
       });
       if (res.ok) return true;
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const current = getLocal("atk_settings", DEFAULT_SETTINGS);
@@ -584,9 +619,9 @@ export async function createDepartment(nama_bidang: string, parent_id?: string |
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch("/api/departments", {
+      const res = await adminFetch("/api/departments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(true),
         body: JSON.stringify({ nama_bidang, parent_id: parent_id || null })
       });
       if (res.ok) return await res.json();
@@ -612,9 +647,9 @@ export async function deleteDepartment(id: string): Promise<boolean> {
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch(`/api/departments/${id}`, { method: "DELETE" });
+      const res = await adminFetch(`/api/departments/${id}`, { method: "DELETE", headers: adminHeaders() });
       if (res.ok) return true;
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const dps = getLocal("atk_bidang", DEFAULT_BIDANG);
@@ -627,9 +662,9 @@ export async function getStockHistory(): Promise<StockHistory[]> {
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch("/api/stock-history");
+      const res = await adminFetch("/api/stock-history", { headers: adminHeaders() });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const hist = getLocal("atk_history", DEFAULT_HISTORY);
@@ -647,9 +682,9 @@ export async function getStats(): Promise<Stats> {
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch("/api/stats");
+      const res = await adminFetch("/api/stats", { headers: adminHeaders() });
       if (res.ok) return await res.json();
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
 
   const items = getLocal("atk_items", DEFAULT_ITEMS);
@@ -708,9 +743,9 @@ export async function resetDatabase(): Promise<boolean> {
   await checkBackend();
   if (!useLocalFallback) {
     try {
-      const res = await fetch("/api/db/reset", { method: "POST" });
+      const res = await adminFetch("/api/db/reset", { method: "POST", headers: adminHeaders() });
       if (res.ok) return true;
-    } catch (e) {}
+    } catch (e) { rethrowSession(e); }
   }
   localStorage.removeItem("atk_items");
   localStorage.removeItem("atk_requests");

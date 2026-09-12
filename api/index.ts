@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const app = express();
@@ -18,6 +19,59 @@ function db(): any {
 
 function genId(prefix: string) {
   return prefix + "-" + Math.random().toString(36).substr(2, 9);
+}
+
+// ── ADMIN SESSION ───────────────────────────────────────────────
+// Stateless signed token: the serverless functions share no memory, so a
+// session cannot live in a variable. The token carries its own expiry and
+// an HMAC over it, which only the server can produce.
+//
+// Secret: a dedicated ADMIN_TOKEN_SECRET if set, otherwise derived from the
+// service role key — already secret, already present, so locking the API
+// needs no new configuration. Rotating that key invalidates every session.
+const ADMIN_TTL_MS = 12 * 60 * 60 * 1000; // 12 jam
+
+function sessionSecret(): string {
+  const explicit = process.env.ADMIN_TOKEN_SECRET;
+  if (explicit) return explicit;
+  const fallback = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!fallback) throw new Error("Tidak ada rahasia untuk menandatangani sesi admin.");
+  return crypto.createHmac("sha256", fallback).update("atk-admin-session").digest("hex");
+}
+
+function signAdminToken(): string {
+  const exp = String(Date.now() + ADMIN_TTL_MS);
+  const sig = crypto.createHmac("sha256", sessionSecret()).update(exp).digest("hex");
+  return `${exp}.${sig}`;
+}
+
+function verifyAdminToken(token: string | undefined): boolean {
+  if (!token) return false;
+  const dot = token.indexOf(".");
+  if (dot < 1) return false;
+  const exp = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  if (!/^\d+$/.test(exp)) return false;
+
+  let expected: string;
+  try { expected = crypto.createHmac("sha256", sessionSecret()).update(exp).digest("hex"); }
+  catch { return false; }
+
+  const a = Buffer.from(sig, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  // Compare in constant time so a wrong token cannot be guessed byte by byte.
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+
+  return Number(exp) > Date.now();
+}
+
+function requireAdmin(req: any, res: any, next: any) {
+  const header = String(req.headers.authorization || "");
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!verifyAdminToken(token)) {
+    return res.status(401).json({ error: "Sesi admin tidak valid atau telah berakhir. Silakan masuk kembali." });
+  }
+  next();
 }
 
 // Health check
@@ -84,13 +138,13 @@ app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
   try {
     const { data, error } = await db().from("settings").select("admin_username, admin_password").single();
-    if (error || !data) {
-      return username === "admin" && password === "admin123"
-        ? res.json({ success: true })
-        : res.status(401).json({ success: false, message: "Username atau password salah!" });
-    }
-    return username === data.admin_username && password === data.admin_password
-      ? res.json({ success: true })
+    const ok = (error || !data)
+      ? username === "admin" && password === "admin123"
+      : username === data.admin_username && password === data.admin_password;
+    // The token is the only thing that opens the admin endpoints, so it is
+    // handed out here and nowhere else.
+    return ok
+      ? res.json({ success: true, token: signAdminToken() })
       : res.status(401).json({ success: false, message: "Username atau password salah!" });
   } catch (e: any) {
     res.status(500).json({ success: false, message: e.message });
@@ -106,7 +160,7 @@ app.get("/api/settings", async (_req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.put("/api/settings", async (req, res) => {
+app.put("/api/settings", requireAdmin, async (req, res) => {
   try {
     const { nomor_whatsapp_admin, nama_kantor, new_password } = req.body;
     const updates: any = {};
@@ -128,7 +182,7 @@ app.get("/api/items", async (_req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/items", async (req, res) => {
+app.post("/api/items", requireAdmin, async (req, res) => {
   try {
     const { nama_barang, kategori, satuan, stok, stok_minimum, gambar_url } = req.body;
     const newItem = {
@@ -148,7 +202,7 @@ app.post("/api/items", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.put("/api/items/:id", async (req, res) => {
+app.put("/api/items/:id", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { nama_barang, kategori, satuan, stok, stok_minimum, gambar_url } = req.body;
@@ -177,7 +231,7 @@ app.put("/api/items/:id", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/items/:id/restock", async (req, res) => {
+app.post("/api/items/:id/restock", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { jumlah, keterangan } = req.body;
@@ -195,7 +249,7 @@ app.post("/api/items/:id/restock", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete("/api/items/:id", async (req, res) => {
+app.delete("/api/items/:id", requireAdmin, async (req, res) => {
   try {
     const { error } = await db().from("items").delete().eq("id", req.params.id);
     if (error) return res.status(500).json({ error: error.message });
@@ -204,7 +258,7 @@ app.delete("/api/items/:id", async (req, res) => {
 });
 
 // REQUESTS
-app.get("/api/requests", async (_req, res) => {
+app.get("/api/requests", requireAdmin, async (_req, res) => {
   try {
     const { data, error } = await db().from("requests").select("*, items(nama_barang, satuan)").order("created_at", { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
@@ -233,7 +287,7 @@ app.post("/api/requests", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.put("/api/requests/:id/process", async (req, res) => {
+app.put("/api/requests/:id/process", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { jumlah_disetujui, catatan_admin } = req.body;
@@ -261,7 +315,7 @@ app.put("/api/requests/:id/process", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.put("/api/requests/:id/complete", async (req, res) => {
+app.put("/api/requests/:id/complete", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { data, error } = await db().from("requests").update({
@@ -273,7 +327,7 @@ app.put("/api/requests/:id/complete", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.put("/api/requests/:id/reject", async (req, res) => {
+app.put("/api/requests/:id/reject", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { catatan_admin } = req.body;
@@ -287,7 +341,7 @@ app.put("/api/requests/:id/reject", async (req, res) => {
 });
 
 // STOCK HISTORY
-app.get("/api/stock-history", async (_req, res) => {
+app.get("/api/stock-history", requireAdmin, async (_req, res) => {
   try {
     const { data, error } = await db().from("stock_history").select("*, items(nama_barang)").order("created_at", { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
@@ -304,7 +358,7 @@ app.get("/api/departments", async (_req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/departments", async (req, res) => {
+app.post("/api/departments", requireAdmin, async (req, res) => {
   try {
     const { nama_bidang, parent_id } = req.body;
     if (!nama_bidang?.trim()) return res.status(400).json({ error: "Nama tidak boleh kosong" });
@@ -321,7 +375,7 @@ app.post("/api/departments", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete("/api/departments/:id", async (req, res) => {
+app.delete("/api/departments/:id", requireAdmin, async (req, res) => {
   try {
     const { error } = await db().from("departments").delete().eq("id", req.params.id);
     if (error) return res.status(500).json({ error: error.message });
@@ -330,7 +384,7 @@ app.delete("/api/departments/:id", async (req, res) => {
 });
 
 // STATS
-app.get("/api/stats", async (_req, res) => {
+app.get("/api/stats", requireAdmin, async (_req, res) => {
   try {
     const { data: items } = await db().from("items").select("stok, stok_minimum");
     const { data: requests } = await db().from("requests").select("created_at, bidang, item_id, jumlah_diminta, status");
@@ -365,7 +419,7 @@ app.get("/api/stats", async (_req, res) => {
 });
 
 // RESET DB
-app.post("/api/db/reset", async (_req, res) => {
+app.post("/api/db/reset", requireAdmin, async (_req, res) => {
   try {
     await db().from("stock_history").delete().neq("id", "");
     await db().from("requests").delete().neq("id", "");
