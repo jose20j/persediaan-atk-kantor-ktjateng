@@ -65,11 +65,17 @@ export default function App() {
       } catch {}
     }
 
-    // Fallback entry point for the admin portal: ?admin=1
-    // The normal way in is the shared login form, which routes admins
-    // automatically. This stays as a way back in if that ever breaks.
-    if (new URLSearchParams(window.location.search).get("admin") === "1") {
-      setPov(isAdminLoggedIn() ? "admin_portal" : "admin_login");
+    // Restore an admin session across reloads. The token was already being
+    // stored, but nothing read it unless ?admin=1 was in the URL, so every
+    // refresh dropped the admin back on the login form.
+    // Checked after the employee restore so the admin portal wins when both
+    // sessions happen to exist in the same browser.
+    if (isAdminLoggedIn()) {
+      setPov("admin_portal");
+      setActiveTab(1);
+    } else if (new URLSearchParams(window.location.search).get("admin") === "1") {
+      // Fallback entry point if the shared login form ever misbehaves.
+      setPov("admin_login");
     }
 
     getSettings().then(s => setOfficeName(s.nama_kantor)).catch(() => {});

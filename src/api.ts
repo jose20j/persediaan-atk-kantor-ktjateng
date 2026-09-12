@@ -274,7 +274,14 @@ export function logoutAdmin() {
 }
 
 export function isAdminLoggedIn(): boolean {
-  return !!localStorage.getItem("atk_admin_token");
+  const t = localStorage.getItem("atk_admin_token");
+  if (!t) return false;
+  if (t === "local") return true;              // jalur cadangan tanpa server
+  // The token is "<kedaluwarsa>.<tanda tangan>". Reading the expiry here only
+  // avoids restoring a session the server will refuse anyway — the signature
+  // is still what actually decides, and only the server can check that.
+  const exp = Number(t.split(".")[0]);
+  return Number.isFinite(exp) && exp > Date.now();
 }
 
 /** Headers for the admin-only endpoints. Without these the server answers 401. */

@@ -27,8 +27,12 @@ interface OrderGroup {
 }
 
 function computeOverallStatus(items: RequestOrder[]): OrderStatus {
-  if (items.every(r => r.status === "Selesai")) return "Selesai";
   if (items.every(r => r.status === "Ditolak")) return "Ditolak";
+  // An order is done once nothing is still waiting — the admin may well have
+  // approved some items and turned others down. Without this the mixed case
+  // fell through to the catch-all below and sat on "Diproses" forever, even
+  // after the admin had finished with it.
+  if (items.every(r => r.status === "Selesai" || r.status === "Ditolak")) return "Selesai";
   if (items.some(r => r.status === "Diproses")) return "Diproses";
   if (items.some(r => r.status === "Pending"))  return "Pending";
   return "Diproses";
