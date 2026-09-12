@@ -10,7 +10,7 @@ import AdminSettings from "./components/AdminSettings";
 import AdminCustomers from "./components/AdminCustomers";
 import ReportExport from "./components/ReportExport";
 import { Customer } from "./types";
-import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getRequests, getBackendStatus, getCustomers, clearCustomerSession, getCurrentCustomer } from "./api";
+import { initializeLocal, isAdminLoggedIn, loginAdmin, logoutAdmin, getSettings, getBackendStatus, getCounts, clearCustomerSession, getCurrentCustomer } from "./api";
 import {
   LayoutDashboard, Package, FileText, Sliders, Users,
   Settings, LogOut, ArrowLeft, Bell, X as XIcon
@@ -74,31 +74,25 @@ export default function App() {
     getSettings().then(s => setOfficeName(s.nama_kantor)).catch(() => {});
   }, []);
 
-  // Poll for new pending orders when admin is logged in
+  // Keep the sidebar badges current while the admin portal is open.
+  // Deliberately a counts-only call: this used to pull every order and
+  // every account twice a minute purely to count them, which grew without
+  // bound as the office kept using the system.
   useEffect(() => {
     if (pov !== "admin_portal") return;
     const poll = async () => {
       try {
-        const reqs = await getRequests();
+        const { pendingOrders, pendingAccounts } = await getCounts();
         setBackendStatus(getBackendStatus());
-        const pendingOrderIds = new Set(
-          reqs.filter(r => r.status === "Pending").map(r => r.order_id || r.id)
-        );
-        const count = pendingOrderIds.size;
-        if (prevPendingCount.current > 0 && count > prevPendingCount.current) {
+        if (prevPendingCount.current > 0 && pendingOrders > prevPendingCount.current) {
           setShowNewOrderNotif(true);
         }
-        prevPendingCount.current = count;
-        setPendingCount(count);
+        prevPendingCount.current = pendingOrders;
+        setPendingCount(pendingOrders);
+        setPendingAccounts(pendingAccounts);
       } catch {
         setBackendStatus(getBackendStatus());
       }
-      // Keep the account badge live too, so a waiting employee is visible
-      // without the admin having to open that page first.
-      try {
-        const accounts = await getCustomers();
-        setPendingAccounts(accounts.filter(c => c.status === "Menunggu").length);
-      } catch { /* badge saja — jangan ganggu alur utama */ }
     };
     poll();
     const interval = setInterval(poll, 30000);

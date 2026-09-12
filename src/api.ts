@@ -544,6 +544,18 @@ export async function registerCustomer(data: {
   return json;
 }
 
+/**
+ * The sidebar badge numbers. Cheap on purpose — see /api/counts.
+ * Never fall back to sample data here: a wrong badge is worse than none.
+ */
+export async function getCounts(): Promise<{ pendingOrders: number; pendingAccounts: number }> {
+  await checkBackend();
+  if (useLocalFallback) return { pendingOrders: 0, pendingAccounts: 0 };
+  const res = await adminFetch("/api/counts");
+  if (!res.ok) throw new Error("Gagal memuat ringkasan.");
+  return await res.json();
+}
+
 // ── Employee accounts, admin side ───────────────────────────────
 export async function getCustomers(): Promise<Customer[]> {
   await checkBackend();

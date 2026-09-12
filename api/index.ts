@@ -385,6 +385,35 @@ app.delete("/api/items/:id", requireAdmin, async (req, res) => {
 });
 
 // REQUESTS
+/**
+ * Just the two numbers the admin sidebar badges need.
+ *
+ * This replaces polling /api/requests every 30 seconds, which downloaded the
+ * entire order history — every row, every column, plus the item join — only
+ * to count how many were still Pending. At 10.000 orders that was ~5 MB a
+ * call, roughly 5 GB a day for an admin with the portal open, against a 5 GB
+ * monthly quota.
+ *
+ * Here only pending rows are read, and only their order_id. That set is
+ * bounded by how fast the admin works, not by how long the office has been
+ * using the system, so the cost stops growing with history.
+ */
+app.get("/api/counts", requireAdmin, async (_req, res) => {
+  try {
+    const { data: pendingRows, error: rErr } = await db()
+      .from("requests").select("order_id, id").eq("status", "Pending");
+    if (rErr) return res.status(500).json({ error: rErr.message });
+
+    const { count: pendingAccounts, error: cErr } = await db()
+      .from("customers").select("id", { count: "exact", head: true }).eq("status", "Menunggu");
+    if (cErr) return res.status(500).json({ error: cErr.message });
+
+    // Several items share one order_id; the badge counts orders, not items.
+    const orders = new Set((pendingRows || []).map((r: any) => r.order_id || r.id));
+    res.json({ pendingOrders: orders.size, pendingAccounts: pendingAccounts || 0 });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/api/requests", requireAdmin, async (_req, res) => {
   try {
     const { data, error } = await db().from("requests").select("*, items(nama_barang, satuan)").order("created_at", { ascending: false });
