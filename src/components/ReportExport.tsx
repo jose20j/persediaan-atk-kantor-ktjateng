@@ -83,7 +83,10 @@ export default function ReportExport() {
   const getRiwayatData = () => {
     const filtered = requests.filter(req => {
       const d = toLocalDateStr(req.created_at);
-      return d >= startDate && d <= endDate;
+      // Kotak tanggal yang kosong berarti tanpa batas di sisi itu.
+      // Membandingkan dengan "" membuat `d <= ""` selalu salah, sehingga
+      // mengosongkan tanggal akhir justru mengosongkan seluruh laporan.
+      return (!startDate || d >= startDate) && (!endDate || d <= endDate);
     });
 
     return filtered.map((req, idx) => {
@@ -115,7 +118,10 @@ export default function ReportExport() {
 
     requests.filter(req => {
       const d = toLocalDateStr(req.created_at);
-      return d >= startDate && d <= endDate;
+      // Kotak tanggal yang kosong berarti tanpa batas di sisi itu.
+      // Membandingkan dengan "" membuat `d <= ""` selalu salah, sehingga
+      // mengosongkan tanggal akhir justru mengosongkan seluruh laporan.
+      return (!startDate || d >= startDate) && (!endDate || d <= endDate);
     }).forEach(req => {
       const bName = req.bidang || "Lain-Lain";
       if (!bidangStats[bName]) {
@@ -152,7 +158,10 @@ export default function ReportExport() {
 
     requests.filter(req => {
       const d = toLocalDateStr(req.created_at);
-      return d >= startDate && d <= endDate;
+      // Kotak tanggal yang kosong berarti tanpa batas di sisi itu.
+      // Membandingkan dengan "" membuat `d <= ""` selalu salah, sehingga
+      // mengosongkan tanggal akhir justru mengosongkan seluruh laporan.
+      return (!startDate || d >= startDate) && (!endDate || d <= endDate);
     }).forEach(req => {
       const bName = req.bidang || "Lain-Lain";
       const uName = req.unit || "(tanpa unit)";
@@ -206,7 +215,10 @@ export default function ReportExport() {
 
     requests.filter(req => {
       const d = toLocalDateStr(req.created_at);
-      return d >= startDate && d <= endDate;
+      // Kotak tanggal yang kosong berarti tanpa batas di sisi itu.
+      // Membandingkan dengan "" membuat `d <= ""` selalu salah, sehingga
+      // mengosongkan tanggal akhir justru mengosongkan seluruh laporan.
+      return (!startDate || d >= startDate) && (!endDate || d <= endDate);
     }).forEach(req => {
       if (req.status === "Selesai" && req.jumlah_disetujui !== null) {
         const diff = req.jumlah_diminta - req.jumlah_disetujui;
@@ -239,7 +251,12 @@ export default function ReportExport() {
 
   // Helper title for report names
   const getReportTitle = () => {
-    const range = `(${startDate} s/d ${endDate})`;
+    // With a side left open the title must not read "( s/d 2026-09-14)".
+    const range =
+      startDate && endDate ? `(${startDate} s/d ${endDate})`
+      : startDate          ? `(sejak ${startDate})`
+      : endDate            ? `(sampai ${endDate})`
+      :                      "(Seluruh Periode)";
     switch (selectedReportType) {
       case 1:
         return "Laporan Stok ATK Saat Ini";
@@ -437,10 +454,11 @@ export default function ReportExport() {
           <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 shrink-0">
             <Calendar className="h-4.5 w-4.5 text-teal-600" /> Filter Rentang Tanggal:
           </span>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
             <input
               type="date"
               value={startDate}
+              max={endDate || undefined}
               onChange={(e) => setStartDate(e.target.value)}
               className="bg-white border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-lg w-full sm:w-auto font-mono"
             />
@@ -448,10 +466,28 @@ export default function ReportExport() {
             <input
               type="date"
               value={endDate}
+              min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
               className="bg-white border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-lg w-full sm:w-auto font-mono"
             />
+            {/* The default range is the last month, so a report covering the
+                whole year needed the dates cleared by hand — which used to
+                empty the report entirely. */}
+            {(startDate || endDate) && (
+              <button
+                onClick={() => { setStartDate(""); setEndDate(""); }}
+                className="px-3 py-2 text-xs font-bold text-teal-700 hover:bg-teal-50 border border-teal-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+              >
+                Semua Tanggal
+              </button>
+            )}
           </div>
+
+          {startDate && endDate && startDate > endDate && (
+            <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+              Tanggal awal melewati tanggal akhir — laporan akan kosong.
+            </span>
+          )}
           {(selectedReportType === 1 || selectedReportType === 4) && (
             <span className="text-[11px] text-slate-400 italic shrink-0">
               * Laporan stok menampilkan kondisi barang saat ini

@@ -147,8 +147,13 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
       else if (statusFilter === "Selesai")  matchesStatus = group.status === "Selesai";
       else if (statusFilter === "Ditolak")  matchesStatus = group.status === "Ditolak";
 
+      // An empty box means "no limit on this side". Comparing against ""
+      // used to make `<= ""` always false, so clearing the end date — the
+      // obvious way to ask for everything — hid every order instead.
       const groupDateStr = toLocalDateStr(group.created_at);
-      const matchesDate = groupDateStr >= startDate && groupDateStr <= endDate;
+      const matchesDate =
+        (!startDate || groupDateStr >= startDate) &&
+        (!endDate   || groupDateStr <= endDate);
 
       return matchesSearch && matchesDept && matchesStatus && matchesDate;
     });
@@ -339,19 +344,38 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
             <Calendar className="h-4 w-4 text-teal-600" /> Rentang Tanggal:
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <input
               type="date" value={startDate}
+              max={endDate || undefined}
               onChange={e => setStartDate(e.target.value)}
               className="bg-slate-50 border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-xl font-mono focus:border-teal-500 focus:outline-hidden"
             />
             <span className="text-slate-400 text-xs font-bold">s/d</span>
             <input
               type="date" value={endDate}
+              min={startDate || undefined}
               onChange={e => setEndDate(e.target.value)}
               className="bg-slate-50 border border-slate-200 text-slate-700 text-xs py-2 px-3 rounded-xl font-mono focus:border-teal-500 focus:outline-hidden"
             />
+
+            {/* Default is the last three months, which quietly hides older
+                orders. This makes "show everything" a single click. */}
+            {(startDate || endDate) && (
+              <button
+                onClick={() => { setStartDate(""); setEndDate(""); }}
+                className="px-3 py-2 text-xs font-bold text-teal-700 hover:bg-teal-50 border border-teal-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Semua Tanggal
+              </button>
+            )}
           </div>
+
+          {startDate && endDate && startDate > endDate && (
+            <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+              Tanggal awal melewati tanggal akhir — tidak ada yang cocok.
+            </span>
+          )}
         </div>
       </div>
 
@@ -366,8 +390,30 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
           <FileText className="h-12 w-12 text-slate-200 mx-auto mb-3" />
           <h3 className="font-bold text-slate-700 text-lg">Tidak Ada Permintaan</h3>
           <p className="text-slate-500 text-sm mt-1">
-            {searchTerm ? `Tidak ada order untuk kata kunci "${searchTerm}".` : "Belum ada permintaan masuk."}
+            {orderGroups.length === 0
+              ? "Belum ada permintaan masuk."
+              : searchTerm
+                ? `Tidak ada order untuk kata kunci "${searchTerm}".`
+                : "Tidak ada yang cocok dengan penyaring saat ini."}
           </p>
+          {/* There are orders, they are just filtered out — say so, and say
+              how many, so an empty screen is never mistaken for no data. */}
+          {orderGroups.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-slate-400">
+                Ada <strong className="text-slate-600">{orderGroups.length} pesanan</strong> di luar rentang tanggal atau penyaring yang dipilih.
+              </p>
+              <button
+                onClick={() => {
+                  setStartDate(""); setEndDate("");
+                  setSearchTerm(""); setStatusFilter("Semua"); setDeptFilter("Semua");
+                }}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Tampilkan Semua
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
