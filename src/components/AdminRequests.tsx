@@ -56,15 +56,11 @@ export default function AdminRequests({ refreshKey }: { refreshKey?: string | nu
   const [statusFilter, setStatusFilter] = useState("Semua");
   const [deptFilter, setDeptFilter] = useState("Semua");
   const [searchTerm, setSearchTerm] = useState("");
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 3);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  });
-  const [endDate, setEndDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  });
+  // Opens showing every order. A pre-filled range silently hid anything
+  // older than three months, so the list disagreed with the dates on screen
+  // and an admin had to clear the boxes before trusting what they saw.
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   // Peeking at what was ordered should not require generating a PDF.
   const [expandedId, setExpandedId] = useState<string | null>(null);
